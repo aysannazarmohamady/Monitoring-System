@@ -10,7 +10,11 @@ $action = $_GET['action'] ?? '';
 $from = normalizeJalaliDate($_GET['from'] ?? '') ?? '';
 $to   = normalizeJalaliDate($_GET['to'] ?? '') ?? '';
 $site        = trim($_GET['site'] ?? '');
-$service     = trim($_GET['service'] ?? '');
+// فیلتر سرویس چندانتخابی: چند سرویس می‌توانند هم‌زمان انتخاب شوند
+$serviceRaw  = $_GET['service'] ?? '';
+if (!is_array($serviceRaw)) $serviceRaw = [$serviceRaw];
+$services    = array_values(array_unique(array_filter(array_map('trim', $serviceRaw), fn($s) => $s !== '')));
+$service     = implode(',', $services);
 $subservice  = trim($_GET['subservice'] ?? '');
 $granularity = ($_GET['granularity'] ?? 'day') === 'month' ? 'month' : 'day';
 $role     = ($_GET['role'] ?? '') === 'publisher' ? 'publisher' : 'reporter';
@@ -54,7 +58,7 @@ switch ($action) {
         break;
 
     case 'subservices':
-        if ($service === '') { echo json_encode(['ok' => false, 'error' => 'ابتدا یک سرویس مشخص انتخاب کنید.'], JSON_UNESCAPED_UNICODE); break; }
+        if (count($services) === 0) { echo json_encode(['ok' => false, 'error' => 'ابتدا یک یا چند سرویس مشخص انتخاب کنید.'], JSON_UNESCAPED_UNICODE); break; }
         echo json_encode(['ok' => true, 'items' => distinctValuesInRange($from, $to, 'service_sub', $service, $site, $timePeriods)], JSON_UNESCAPED_UNICODE);
         break;
 

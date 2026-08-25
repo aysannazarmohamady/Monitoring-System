@@ -85,7 +85,10 @@ require __DIR__ . '/includes/layout_top.php';
     </div>
     <div class="col-md-3">
       <label class="form-label">سرویس</label>
-      <select id="ovcService" class="form-select"><option value="">همه سرویس‌ها (کل ایسنا)</option></select>
+      <div class="dropdown">
+        <button type="button" id="ovcServiceBtn" class="form-select text-start" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">همه سرویس‌ها (کل ایسنا)</button>
+        <div id="ovcServiceMenu" class="dropdown-menu p-2" style="max-height:260px; overflow:auto; min-width:220px;"></div>
+      </div>
     </div>
     <div class="col-md-6">
       <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -191,7 +194,7 @@ require __DIR__ . '/includes/layout_top.php';
   <!-- زیرسرویس -->
   <div class="card shadow-sm p-4 mb-4">
     <h6 class="mb-3">عملکرد زیرسرویس‌ها</h6>
-    <div id="subNeedService" class="text-muted small">برای مشاهده زیرسرویس‌ها، ابتدا یک سرویس مشخص (نه «همه سرویس‌ها») را از بخش آمار کلی انتخاب کنید.</div>
+    <div id="subNeedService" class="text-muted small">برای مشاهده زیرسرویس‌ها، ابتدا یک یا چند سرویس مشخص (نه «همه سرویس‌ها») را از بخش آمار کلی انتخاب کنید.</div>
     <div id="subSelectors" class="row g-3 mb-3" style="display:none">
       <div class="col-md-6">
         <label class="form-label">زیرسرویس</label>
@@ -366,7 +369,14 @@ const PALETTE = ['#123a73','#1f5aa8','#e0a800','#c0392b','#16a085','#8e44ad','#d
 
 function qs(id){ return document.getElementById(id); }
 function currentRange(){ return { from: qs('fFrom').value.trim(), to: qs('fTo').value.trim(), granularity: qs('fGranularity').value }; }
-function currentService(){ return qs('ovcService').value; }
+let selectedServices = [];
+function currentService(){ return selectedServices.join(','); }
+function updateServiceButtonLabel(){
+  const btn = qs('ovcServiceBtn');
+  if (selectedServices.length === 0) btn.textContent = 'همه سرویس‌ها (کل ایسنا)';
+  else if (selectedServices.length === 1) btn.textContent = selectedServices[0];
+  else btn.textContent = selectedServices.length + ' سرویس انتخاب‌شده';
+}
 function currentSite(){ return qs('ovcSite').value; }
 function currentTimePeriods(){ return Array.from(document.querySelectorAll('.f-time-period:checked')).map(el => el.value); }
 document.querySelectorAll('.f-time-period').forEach(el => {
@@ -551,9 +561,27 @@ async function loadServiceOptions(){
   const {from, to} = currentRange();
   const site = currentSite();
   const data = await fetchJson({action:'services', from, to, site});
-  const sel = qs('ovcService');
-  sel.innerHTML = '<option value="">همه سرویس‌ها (کل ایسنا)</option>';
-  if (data.ok) data.items.forEach(v => { const o = document.createElement('option'); o.value=v; o.textContent=v; sel.appendChild(o); });
+  const menu = qs('ovcServiceMenu');
+  menu.innerHTML = '';
+  const items = data.ok ? data.items : [];
+  selectedServices = selectedServices.filter(s => items.includes(s));
+  items.forEach((v, i) => {
+    const id = 'ovcSvc_' + i;
+    const wrap = document.createElement('div');
+    wrap.className = 'form-check';
+    wrap.innerHTML = `<input class="form-check-input" type="checkbox" id="${id}"><label class="form-check-label" for="${id}"></label>`;
+    wrap.querySelector('label').textContent = v;
+    const cb = wrap.querySelector('input');
+    cb.checked = selectedServices.includes(v);
+    cb.addEventListener('change', () => {
+      if (cb.checked){ if (!selectedServices.includes(v)) selectedServices.push(v); }
+      else { selectedServices = selectedServices.filter(s => s !== v); }
+      updateServiceButtonLabel();
+      refreshScope();
+    });
+    menu.appendChild(wrap);
+  });
+  updateServiceButtonLabel();
 }
 
 async function loadOverview(){
@@ -596,7 +624,7 @@ async function loadHourly(){
 
 async function loadSubserviceOptions(){
   const service = currentService();
-  if (!service){
+  if (selectedServices.length === 0){
     qs('subNeedService').style.display=''; qs('subSelectors').style.display='none';
     qs('subEmpty').style.display='none'; qs('subBody').style.display='none';
     return;
@@ -632,7 +660,7 @@ async function loadTopSubserviceOptions(){
   const service = currentService();
   const site = currentSite();
   const {from, to} = currentRange();
-  if (!service){ fillSelect(qs('topSubservice'), [], 'همه زیرسرویس‌ها'); return; }
+  if (selectedServices.length === 0){ fillSelect(qs('topSubservice'), [], 'همه زیرسرویس‌ها'); return; }
   const data = await fetchJson({action:'subservices', from, to, service, site, keyword: currentKeywords(), keyword_mode: currentKeywordMode(), time_period: currentTimePeriods()});
   if (data.ok) fillSelect(qs('topSubservice'), data.items, 'همه زیرسرویس‌ها');
 }
@@ -792,7 +820,6 @@ qs('btnLoad').addEventListener('click', fullReload);
 qs('fFrom').addEventListener('change', fullReload);
 qs('fTo').addEventListener('change', fullReload);
 qs('ovcSite').addEventListener('change', onSiteChange);
-qs('ovcService').addEventListener('change', refreshScope);
 
 qs('fGranularity').addEventListener('change', () => {
   if (qs('reportArea').style.display === 'none') return;
