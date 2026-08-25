@@ -339,6 +339,13 @@ function rowTimePeriod(string $pubTime): string
     return '';
 }
 
+// فیلتر سرویس از نوع چندانتخابی را پشتیبانی می‌کند (چند سرویس با کاما جدا شده)
+function serviceFilterMatches(string $serviceFilter, string $value): bool
+{
+    if ($serviceFilter === '') return true;
+    return in_array($value, explode(',', $serviceFilter), true);
+}
+
 function rowsInRange(string $from, string $to, string $service = '', string $role = '', string $name = '', string $newsType = '', string $subservice = '', string $site = '', array $titleKeywords = [], string $keywordMode = 'and', array $timePeriods = []): array
 {
     $activeFileIds = excelActiveFileIds();
@@ -353,7 +360,7 @@ function rowsInRange(string $from, string $to, string $service = '', string $rol
         $title = trim((string)($r['title'] ?? ''));
         if ($title === '') continue;
         if ($site !== '' && ($r['site'] ?? '') !== $site) continue;
-        if ($service !== '' && ($r['service_main'] ?? '') !== $service) continue;
+        if (!serviceFilterMatches($service, (string)($r['service_main'] ?? ''))) continue;
         if ($subservice !== '' && ($r['service_sub'] ?? '') !== $subservice) continue;
         if ($role !== '' && $name !== '') {
             $field = $role === 'publisher' ? 'publisher' : 'reporter';
@@ -568,7 +575,7 @@ function newsEntriesInRange(string $from, string $to, string $service = '', stri
         $d = $r['entry_date'] ?? '';
         if ($d === '' || $d < $from || $d > $to) return false;
         if ($site !== '' && ($r['site'] ?? '') !== $site) return false;
-        if ($service !== '' && ($r['service_main'] ?? '') !== $service) return false;
+        if (!serviceFilterMatches($service, (string)($r['service_main'] ?? ''))) return false;
         if ($subservice !== '' && ($r['service_sub'] ?? '') !== $subservice) return false;
         if ($reporter !== '' && ($r['reporter'] ?? '') !== $reporter) return false;
         if ($newsType !== '' && ($r['news_type'] ?? '') !== $newsType) return false;
