@@ -25,14 +25,42 @@ arsort($monitorCounts);
 $topReporter = array_key_first($monitorCounts) ?? '';
 $topReporterCount = $monitorCounts[$topReporter] ?? 0;
 
-$publisherCounts = [];
-foreach ($dateEntries as $r) {
-    $pub = trim((string)($r['publisher'] ?? ''));
-    if ($pub === '') continue;
-    $publisherCounts[$pub] = ($publisherCounts[$pub] ?? 0) + 1;
-}
-arsort($publisherCounts);
 $recent = array_slice($dateEntries, 0, 5);
+
+// ---- اورویو آماری روز: بر اساس کل فایل اکسل آپلودشده (excel_rows)، مشابه بخش ارزیابی ----
+$fileRows = $hasExcelForDate ? rowsInRange($date, $date) : [];
+$fileCount = count($fileRows);
+$totalViewsFile = array_sum(array_map(fn($r) => (int)($r['views'] ?? 0), $fileRows));
+$avgViewsAll = $fileCount > 0 ? round($totalViewsFile / $fileCount) : 0;
+
+$fileReporterCounts = [];
+$filePublisherCounts = [];
+$serviceStats = []; // service_main => ['count'=>, 'views_sum'=>, 'top'=>['title'=>,'views'=>]]
+foreach ($fileRows as $r) {
+    $rep = trim((string)($r['reporter'] ?? ''));
+    if ($rep !== '' && $rep !== '-' && $rep !== '—') $fileReporterCounts[$rep] = ($fileReporterCounts[$rep] ?? 0) + 1;
+    $pub = trim((string)($r['publisher'] ?? ''));
+    if ($pub !== '') $filePublisherCounts[$pub] = ($filePublisherCounts[$pub] ?? 0) + 1;
+
+    $svc = trim((string)($r['service_main'] ?? '')) ?: 'نامشخص';
+    $v = (int)($r['views'] ?? 0);
+    if (!isset($serviceStats[$svc])) $serviceStats[$svc] = ['count' => 0, 'views_sum' => 0, 'top_title' => '', 'top_views' => -1];
+    $serviceStats[$svc]['count']++;
+    $serviceStats[$svc]['views_sum'] += $v;
+    if ($v > $serviceStats[$svc]['top_views']) {
+        $serviceStats[$svc]['top_views'] = $v;
+        $serviceStats[$svc]['top_title'] = (string)($r['title'] ?? '');
+    }
+}
+arsort($fileReporterCounts);
+$topActualReporter = array_key_first($fileReporterCounts) ?? '';
+$topActualReporterCount = $fileReporterCounts[$topActualReporter] ?? 0;
+arsort($filePublisherCounts);
+$topPublisher = array_key_first($filePublisherCounts) ?? '';
+$topPublisherCount = $filePublisherCounts[$topPublisher] ?? 0;
+
+uasort($serviceStats, fn($a, $b) => $b['count'] <=> $a['count']);
+$topServices = array_slice($serviceStats, 0, 6, true);
 
 $trendsData = jsonRead('google_trends');
 $trendsList = $trendsData['trends'] ?? null;
@@ -90,6 +118,79 @@ require __DIR__ . '/includes/layout_top.php';
       </a>
     <?php endif; ?>
   </div>
+</div>
+
+<div class="card shadow-sm p-4 mb-4">
+  <div class="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
+    <h6 class="mb-0">آمار کلی روز  (<?= htmlspecialchars(jalaliDateLabel($date)) ?>) <span class="small text-muted fw-normal"> بر اساس کل اخبار ارسالی </span></h6>
+  </div>
+  <?php if (!$hasExcelForDate): ?>
+    <div class="text-muted small">برای این تاریخ فایل اکسلی آپلود نشده؛ آماری برای نمایش وجود ندارد.</div>
+  <?php else: ?>
+  <div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+      <div class="card shadow-sm p-3 text-center h-100">
+        <div class="fs-4 fw-bold text-primary"><?= (int)$fileCount ?></div>
+        <div class="small text-muted">تعداد کل اخبار</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card shadow-sm p-3 text-center h-100">
+        <div class="fs-4 fw-bold text-primary"><?= (int)$avgViewsAll ?></div>
+        <div class="small text-muted">میانگین بازدید</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card shadow-sm p-3 text-center h-100">
+        <?php if ($topActualReporter !== ''): ?>
+          <div class="fs-6 fw-bold text-primary text-truncate"><?= htmlspecialchars($topActualReporter) ?></div>
+          <div class="small text-muted">خبرنگار با بیشترین خبر (<?= (int)$topActualReporterCount ?>)</div>
+        <?php else: ?>
+          <div class="fs-6 fw-bold text-muted">بدون داده</div>
+          <div class="small text-muted">خبرنگار با بیشترین خبر</div>
+        <?php endif; ?>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card shadow-sm p-3 text-center h-100">
+        <?php if ($topPublisher !== ''): ?>
+          <div class="fs-6 fw-bold text-primary text-truncate"><?= htmlspecialchars($topPublisher) ?></div>
+          <div class="small text-muted">ناشر با بیشترین خبر (<?= (int)$topPublisherCount ?>)</div>
+        <?php else: ?>
+          <div class="fs-6 fw-bold text-muted">بدون داده</div>
+          <div class="small text-muted">ناشر با بیشترین خبر</div>
+        <?php endif; ?>
+      </div>
+    </div>
+  </div>
+  <?php if (empty($topServices)): ?>
+    <div class="text-muted small">داده‌ای برای این تاریخ ثبت نشده است.</div>
+  <?php else: ?>
+    <div class="text-muted small mb-2">۶ سرویس با بیشترین تعداد خبر ارسالی</div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle sortable-table">
+        <thead><tr>
+          <th>سرویس</th><th>تعداد خبر</th><th>درصد از کل</th><th>میانگین بازدید</th><th>پربازدیدترین خبر</th><th>بازدید خبر</th>
+        </tr></thead>
+        <tbody>
+          <?php foreach ($topServices as $svcName => $s):
+            $pct = $fileCount > 0 ? round($s['count'] / $fileCount * 100, 1) : 0;
+            $svcAvg = $s['count'] > 0 ? round($s['views_sum'] / $s['count']) : 0;
+          ?>
+            <tr>
+              <td><?= htmlspecialchars($svcName) ?></td>
+              <td><?= (int)$s['count'] ?></td>
+              <td><?= $pct ?>%</td>
+              <td><?= (int)$svcAvg ?></td>
+              <td><?= htmlspecialchars($s['top_title']) ?></td>
+              <td><?= (int)max(0, $s['top_views']) ?></td>
+            </tr>
+          <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div>
+  <?php endif; ?>
+  <?php endif; ?>
 </div>
 
 <div class="card shadow-sm p-4 mb-4">
