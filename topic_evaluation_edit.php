@@ -1,0 +1,107 @@
+<?php
+require_once __DIR__ . '/includes/helpers.php';
+require_once __DIR__ . '/includes/auth.php';
+require_once __DIR__ . '/includes/data.php';
+require_once __DIR__ . '/includes/topics.php';
+requireLoginPage();
+
+$date = normalizeJalaliDate($_GET['date'] ?? $_POST['date'] ?? '') ?? '';
+$code = normalizeDigits(trim($_GET['code'] ?? $_POST['code'] ?? ''));
+$backParams = [
+    'from'     => $_GET['from'] ?? $_POST['from'] ?? '',
+    'to'       => $_GET['to'] ?? $_POST['to'] ?? '',
+    'service'  => $_GET['service'] ?? $_POST['service'] ?? '',
+    'ranges'   => $_GET['ranges'] ?? $_POST['ranges'] ?? [],
+    'filtered' => 1,
+];
+
+$excelRow = ($date !== '' && $code !== '') ? excelRowFind($date, $code) : null;
+if (!$excelRow) {
+    die('این خبر در فایل اکسل پیدا نشد.');
+}
+
+$topics = topicsAll();
+$existingTopics = topicEvalGet($date, $code);
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $selected = array_filter(array_map('trim', (array)($_POST['topics'] ?? [])), fn($t) => $t !== '');
+    $known = array_column($topics, 'name');
+    foreach ($selected as $t) {
+        if (!in_array($t, $known, true)) topicAdd($t); // ثبت خودکار موضوعات تازه‌ساخته‌شده در لیست کلی
+    }
+    $me = currentUser();
+    topicEvalSet($date, $code, $selected, (string)($me['username'] ?? ''));
+    header('Location: topic_evaluation.php?' . http_build_query($backParams));
+    exit;
+}
+
+$suggestedFromTitle = topicsSuggestForTitle((string)($excelRow['title'] ?? ''), $topics);
+$suggestedFromService = topicsSuggestForServiceSub((string)($excelRow['service_main'] ?? ''), (string)($excelRow['service_sub'] ?? ''));
+$suggested = array_values(array_unique(array_merge($suggestedFromTitle, $suggestedFromService)));
+$preselected = !empty($existingTopics) ? $existingTopics : $suggested;
+
+require __DIR__ . '/includes/layout_top.php';
+?>
+<link href="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.3.1/dist/js/tom-select.complete.min.js"></script>
+
+<div class="card shadow-sm p-4">
+  <h5 class="mb-3">تعیین موضوع خبر (ارزیابی موضوعی)</h5>
+  <div class="row g-3 mb-2">
+    <div class="col-md-4"><label class="form-label">سرویس</label><input class="form-control" value="<?= htmlspecialchars($excelRow['service_main'] ?? '') ?>" disabled></div>
+    <div class="col-md-4"><label class="form-label">زیرسرویس</label><input class="form-control" value="<?= htmlspecialchars($excelRow['service_sub'] ?? '') ?>" disabled></div>
+    <div class="col-md-4"><label class="form-label">نوع خبر</label><input class="form-control" value="<?= htmlspecialchars($excelRow['news_type'] ?? '') ?>" disabled></div>
+    <div class="col-12"><label class="form-label">تیتر</label><input class="form-control" value="<?= htmlspecialchars($excelRow['title'] ?? '') ?>" disabled></div>
+    <div class="col-md-4"><label class="form-label">ساعت انتشار</label><input class="form-control" value="<?= htmlspecialchars($excelRow['pub_time'] ?? '') ?>" disabled></div>
+    <div class="col-md-4"><label class="form-label">بازدید</label><input class="form-control" value="<?= (int)($excelRow['views'] ?? 0) ?>" disabled></div>
+  </div>
+  <hr>
+  <form method="post" class="row g-3">
+    <input type="hidden" name="date" value="<?= htmlspecialchars($date) ?>">
+    <input type="hidden" name="code" value="<?= htmlspecialchars($code) ?>">
+    <input type="hidden" name="from" value="<?= htmlspecialchars($backParams['from']) ?>">
+    <input type="hidden" name="to" value="<?= htmlspecialchars($backParams['to']) ?>">
+    <input type="hidden" name="service" value="<?= htmlspecialchars($backParams['service']) ?>">
+    <?php foreach ((array)$backParams['ranges'] as $rg): ?>
+      <input type="hidden" name="ranges[]" value="<?= htmlspecialchars($rg) ?>">
+    <?php endforeach; ?>
+
+    <div class="col-12">
+      <label class="form-label">موضوع</label>
+      <select class="form-select" name="topics[]" id="topicSelect" multiple>
+        <?php foreach ($topics as $t): ?>
+          <option value="<?= htmlspecialchars($t['name']) ?>" title="<?= htmlspecialchars($t['definition']) ?>"
+            <?= in_array($t['name'], $preselected, true) ? 'selected' : '' ?>>
+            <?= htmlspecialchars($t['name']) ?>
+          </option>
+        <?php endforeach; ?>
+      </select>
+      <?php if (!empty($suggested)): ?>
+        <div class="form-text">پیشنهاد خودکار بر اساس تیتر: <?= htmlspecialchars(implode('، ', $suggested)) ?></div>
+      <?php endif; ?>
+    </div>
+
+    <div class="col-12">
+      <button class="btn btn-success">ذخیره</button>
+      <a href="topic_evaluation.php?<?= http_build_query($backParams) ?>" class="btn btn-outline-secondary">انصراف</a>
+    </div>
+  </form>
+</div>
+
+<script>
+new TomSelect('#topicSelect', {
+  create: true,
+  persist: false,
+  createOnBlur: true,
+  plugins: ['remove_button'],
+  maxOptions: 1000,
+  score: function(search){
+    const words = search.toLowerCase().trim().split(/\s+/).filter(Boolean);
+    return function(item){
+      const text = (item.text || '').toLowerCase();
+      return words.length === 0 || words.some(w => text.includes(w)) ? 1 : 0;
+    };
+  }
+});
+</script>
+<?php require __DIR__ . '/includes/layout_bottom.php'; ?>
