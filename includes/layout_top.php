@@ -80,11 +80,22 @@ body{
     <div class="collapse navbar-collapse" id="nav1">
       <ul class="navbar-nav ms-auto gap-2 align-items-lg-center">
         <li class="nav-item"><a class="nav-link" href="index.php">داشبورد</a></li>
-        <li class="nav-item"><a class="nav-link" href="entry.php">ثبت خبر</a></li>
-        <li class="nav-item"><a class="nav-link" href="file_entry.php">ثبت از پرونده</a></li>
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">نظارت</a>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="entry.php">ثبت خبر</a></li>
+            <li><a class="dropdown-item" href="file_entry.php">ثبت از پرونده</a></li>
+            <li><a class="dropdown-item" href="report.php">گزارش‌گیری</a></li>
+          </ul>
+        </li>
         <li class="nav-item"><a class="nav-link" href="upload.php">آپلود اکسل روزانه</a></li>
-        <li class="nav-item"><a class="nav-link" href="report.php">گزارش‌گیری</a></li>
-        <li class="nav-item"><a class="nav-link" href="evaluation.php">ارزیابی</a></li>
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">ارزیابی</a>
+          <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="evaluation.php">ارزیابی خودکار</a></li>
+            <li><a class="dropdown-item" href="topic_evaluation.php">ارزیابی موضوعی</a></li>
+          </ul>
+        </li>
         <li class="nav-item"><a class="nav-link" href="tasks.php">میز کار</a></li>
         <?php if ($__me): ?>
         <li class="nav-item mt-2 mt-lg-0">
