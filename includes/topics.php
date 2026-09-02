@@ -121,6 +121,19 @@ function topicEvalGet(string $date, string $code): array
     return [];
 }
 
+// اطلاعات آخرین ویرایش (نام کاربری و زمان) برای یک خبر
+function topicEvalMeta(string $date, string $code): ?array
+{
+    $key = topicEvalKey($date, $code);
+    $rows = jsonRead('topic_evaluations');
+    foreach ($rows as $r) {
+        if (($r['key'] ?? '') === $key) {
+            return ['updated_by' => $r['updated_by'] ?? '', 'updated_at' => $r['updated_at'] ?? ''];
+        }
+    }
+    return null;
+}
+
 // ثبت/به‌روزرسانی موضوعات یک خبر
 function topicEvalSet(string $date, string $code, array $topics, string $username = ''): void
 {
@@ -181,6 +194,7 @@ function topicEvaluationRows(string $from, string $to, string $service, array $r
         $r['__views'] = $views;
         $r['__bucket'] = $bucket['label'];
         $r['__topics'] = topicEvalGet((string)$r['date'], (string)$r['code']);
+        $r['__meta'] = topicEvalMeta((string)$r['date'], (string)$r['code']);
         $out[] = $r;
     }
     usort($out, fn($a, $b) => $b['__views'] <=> $a['__views']);
