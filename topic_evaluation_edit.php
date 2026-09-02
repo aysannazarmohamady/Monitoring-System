@@ -22,6 +22,7 @@ if (!$excelRow) {
 
 $topics = topicsAll();
 $existingTopics = topicEvalGet($date, $code);
+$existingMeta = topicEvalMeta($date, $code);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $selected = array_filter(array_map('trim', (array)($_POST['topics'] ?? [])), fn($t) => $t !== '');
@@ -30,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!in_array($t, $known, true)) topicAdd($t); // ثبت خودکار موضوعات تازه‌ساخته‌شده در لیست کلی
     }
     $me = currentUser();
-    topicEvalSet($date, $code, $selected, (string)($me['username'] ?? ''));
+    topicEvalSet($date, $code, $selected, (string)($me['display_name'] ?? $me['username'] ?? ''));
     header('Location: topic_evaluation.php?' . http_build_query($backParams));
     exit;
 }
@@ -47,6 +48,12 @@ require __DIR__ . '/includes/layout_top.php';
 
 <div class="card shadow-sm p-4">
   <h5 class="mb-3">تعیین موضوع خبر (ارزیابی موضوعی)</h5>
+  <?php if (!empty($existingMeta['updated_by'])): ?>
+    <div class="alert alert-light border py-2 mb-3">
+      آخرین ویرایش توسط <strong><?= htmlspecialchars($existingMeta['updated_by']) ?></strong>
+      در <?= htmlspecialchars($existingMeta['updated_at']) ?>
+    </div>
+  <?php endif; ?>
   <div class="row g-3 mb-2">
     <div class="col-md-4"><label class="form-label">سرویس</label><input class="form-control" value="<?= htmlspecialchars($excelRow['service_main'] ?? '') ?>" disabled></div>
     <div class="col-md-4"><label class="form-label">زیرسرویس</label><input class="form-control" value="<?= htmlspecialchars($excelRow['service_sub'] ?? '') ?>" disabled></div>
