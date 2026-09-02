@@ -51,7 +51,12 @@ require __DIR__ . '/includes/layout_top.php';
     <div class="col-md-4"><label class="form-label">سرویس</label><input class="form-control" value="<?= htmlspecialchars($excelRow['service_main'] ?? '') ?>" disabled></div>
     <div class="col-md-4"><label class="form-label">زیرسرویس</label><input class="form-control" value="<?= htmlspecialchars($excelRow['service_sub'] ?? '') ?>" disabled></div>
     <div class="col-md-4"><label class="form-label">نوع خبر</label><input class="form-control" value="<?= htmlspecialchars($excelRow['news_type'] ?? '') ?>" disabled></div>
-    <div class="col-12"><label class="form-label">تیتر</label><input class="form-control" value="<?= htmlspecialchars($excelRow['title'] ?? '') ?>" disabled></div>
+    <div class="col-12"><label class="form-label">تیتر</label>
+      <div class="form-control bg-body-secondary">
+        <?php $link = trim((string)($excelRow['news_link'] ?? '')); $title = htmlspecialchars($excelRow['title'] ?? '') ?: '(بدون تیتر)'; ?>
+        <?= $link !== '' ? '<a href="' . htmlspecialchars($link) . '" target="_blank" rel="noopener">' . $title . '</a>' : $title ?>
+      </div>
+    </div>
     <div class="col-md-4"><label class="form-label">ساعت انتشار</label><input class="form-control" value="<?= htmlspecialchars($excelRow['pub_time'] ?? '') ?>" disabled></div>
     <div class="col-md-4"><label class="form-label">بازدید</label><input class="form-control" value="<?= (int)($excelRow['views'] ?? 0) ?>" disabled></div>
   </div>
