@@ -86,12 +86,21 @@ require __DIR__ . '/includes/layout_top.php';
       <tbody>
         <?php foreach ($rows as $r): ?>
           <tr>
-            <td><?= htmlspecialchars($r['title'] ?? '') ?></td>
+            <td><?php $link = trim((string)($r['news_link'] ?? '')); $title = htmlspecialchars($r['title'] ?? '') ?: '(بدون تیتر)'; ?>
+              <?= $link !== '' ? '<a href="' . htmlspecialchars($link) . '" target="_blank" rel="noopener">' . $title . '</a>' : $title ?>
+            </td>
             <td><?= htmlspecialchars($r['service_main'] ?? '') ?></td>
             <td><?= htmlspecialchars($r['service_sub'] ?? '') ?></td>
             <td><?= htmlspecialchars($r['news_type'] ?? '') ?></td>
             <td><?= $r['__topics'] ? htmlspecialchars(implode('، ', $r['__topics'])) : '<span class="text-muted">—</span>' ?></td>
-            <td><?= $r['__topics'] ? '<span class="badge text-bg-success">ثبت شده</span>' : '<span class="badge text-bg-secondary">ثبت نشده</span>' ?></td>
+            <td>
+              <?= $r['__topics'] ? '<span class="badge text-bg-success">ثبت شده</span>' : '<span class="badge text-bg-secondary">ثبت نشده</span>' ?>
+              <?php if (!empty($r['__meta']['updated_by'])): ?>
+                <span class="badge text-bg-light text-muted border" title="آخرین ویرایش: <?= htmlspecialchars($r['__meta']['updated_at']) ?>">
+                  <?= htmlspecialchars($r['__meta']['updated_by']) ?>
+                </span>
+              <?php endif; ?>
+            </td>
             <td><?= htmlspecialchars($r['pub_time'] ?? '') ?></td>
             <td><?= (int)$r['__views'] ?></td>
             <td><?= htmlspecialchars($r['__bucket']) ?></td>

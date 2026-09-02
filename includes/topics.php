@@ -121,6 +121,104 @@ function topicEvalGet(string $date, string $code): array
     return [];
 }
 
+// اطلاعات آخرین ویرایش (نام کاربری و زمان) برای یک خبر
+function topicEvalMeta(string $date, string $code): ?array
+{
+    $key = topicEvalKey($date, $code);
+    $rows = jsonRead('topic_evaluations');
+    foreach ($rows as $r) {
+        if (($r['key'] ?? '') === $key) {
+            return ['updated_by' => $r['updated_by'] ?? '', 'updated_at' => $r['updated_at'] ?? ''];
+        }
+    }
+    return null;
+}
+
+// ===================== یادداشت‌های آزاد کاربران روی هر خبر =====================
+// هر یادداشت: {id, username, display_name, text, created_at, updated_at}
+
+function topicNotesGet(string $date, string $code): array
+{
+    $key = topicEvalKey($date, $code);
+    $rows = jsonRead('topic_evaluations');
+    foreach ($rows as $r) {
+        if (($r['key'] ?? '') === $key) return $r['notes'] ?? [];
+    }
+    return [];
+}
+
+function topicNoteAdd(string $date, string $code, string $username, string $displayName, string $text): void
+{
+    $text = trim($text);
+    if ($text === '') return;
+    $key = topicEvalKey($date, $code);
+    jsonUpdate('topic_evaluations', function ($rows) use ($key, $username, $displayName, $text) {
+        $now = date('Y-m-d H:i:s');
+        foreach ($rows as &$r) {
+            if (($r['key'] ?? '') === $key) {
+                $notes = $r['notes'] ?? [];
+                $maxId = 0;
+                foreach ($notes as $n) $maxId = max($maxId, (int)($n['id'] ?? 0));
+                $notes[] = ['id' => $maxId + 1, 'username' => $username, 'display_name' => $displayName,
+                            'text' => $text, 'created_at' => $now, 'updated_at' => $now];
+                $r['notes'] = $notes;
+                return $rows;
+            }
+        }
+        $rows[] = ['key' => $key, 'topics' => [], 'notes' => [
+            ['id' => 1, 'username' => $username, 'display_name' => $displayName,
+             'text' => $text, 'created_at' => $now, 'updated_at' => $now]
+        ]];
+        return $rows;
+    });
+}
+
+// فقط نویسنده‌ی یادداشت اجازه‌ی ویرایش دارد
+function topicNoteEdit(string $date, string $code, int $noteId, string $username, string $text): bool
+{
+    $text = trim($text);
+    if ($text === '') return false;
+    $key = topicEvalKey($date, $code);
+    $ok = false;
+    jsonUpdate('topic_evaluations', function ($rows) use ($key, $noteId, $username, $text, &$ok) {
+        $now = date('Y-m-d H:i:s');
+        foreach ($rows as &$r) {
+            if (($r['key'] ?? '') !== $key) continue;
+            foreach (($r['notes'] ?? []) as &$n) {
+                if ((int)($n['id'] ?? 0) === $noteId && strcasecmp((string)($n['username'] ?? ''), $username) === 0) {
+                    $n['text'] = $text;
+                    $n['updated_at'] = $now;
+                    $ok = true;
+                }
+            }
+        }
+        return $rows;
+    });
+    return $ok;
+}
+
+// فقط نویسنده‌ی یادداشت اجازه‌ی حذف دارد
+function topicNoteDelete(string $date, string $code, int $noteId, string $username): bool
+{
+    $key = topicEvalKey($date, $code);
+    $ok = false;
+    jsonUpdate('topic_evaluations', function ($rows) use ($key, $noteId, $username, &$ok) {
+        foreach ($rows as &$r) {
+            if (($r['key'] ?? '') !== $key) continue;
+            $before = count($r['notes'] ?? []);
+            $r['notes'] = array_values(array_filter($r['notes'] ?? [], function ($n) use ($noteId, $username, &$ok) {
+                if ((int)($n['id'] ?? 0) === $noteId && strcasecmp((string)($n['username'] ?? ''), $username) === 0) {
+                    $ok = true;
+                    return false;
+                }
+                return true;
+            }));
+        }
+        return $rows;
+    });
+    return $ok;
+}
+
 // ثبت/به‌روزرسانی موضوعات یک خبر
 function topicEvalSet(string $date, string $code, array $topics, string $username = ''): void
 {
@@ -181,6 +279,7 @@ function topicEvaluationRows(string $from, string $to, string $service, array $r
         $r['__views'] = $views;
         $r['__bucket'] = $bucket['label'];
         $r['__topics'] = topicEvalGet((string)$r['date'], (string)$r['code']);
+        $r['__meta'] = topicEvalMeta((string)$r['date'], (string)$r['code']);
         $out[] = $r;
     }
     usort($out, fn($a, $b) => $b['__views'] <=> $a['__views']);
