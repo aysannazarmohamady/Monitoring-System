@@ -81,7 +81,7 @@ function excelRowsDeleteByFile(int $fileId): void
 
 // جست‌وجوی یک ردیف اکسل با تاریخِ خودِ ردیف + کد خبر، در میان همه فایل‌های فعال
 // (نه فقط فایل‌هایی که تاریخ فایلشان با این تاریخ برابر است - چون یک فایل می‌تواند چند روز را شامل شود)
-function excelRowFind(string $date, string $code): ?array
+function excelRowFind(string $date, string $code, string $site = ''): ?array
 {
     $date = normalizeJalaliDate($date) ?? $date;
     $code = normalizeDigits(trim($code));
@@ -90,7 +90,9 @@ function excelRowFind(string $date, string $code): ?array
     foreach (jsonRead('excel_rows') as $r) {
         if (!isset($activeFileIds[(int)($r['file_id'] ?? 0)])) continue;
         if (trim((string)($r['date'] ?? '')) !== $date) continue;
-        if (normalizeDigits((string)($r['code'] ?? '')) === $code) return $r;
+        if (normalizeDigits((string)($r['code'] ?? '')) !== $code) continue;
+        if ($site !== '' && trim((string)($r['site'] ?? '')) !== $site) continue;
+        return $r;
     }
     return null;
 }
