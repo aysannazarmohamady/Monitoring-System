@@ -86,7 +86,9 @@ require __DIR__ . '/includes/layout_top.php';
       <tbody>
         <?php foreach ($rows as $r): ?>
           <tr>
-            <td><?= htmlspecialchars($r['title'] ?? '') ?></td>
+            <td><?php $link = trim((string)($r['news_link'] ?? '')); $title = htmlspecialchars($r['title'] ?? '') ?: '(بدون تیتر)'; ?>
+              <?= $link !== '' ? '<a href="' . htmlspecialchars($link) . '" target="_blank" rel="noopener">' . $title . '</a>' : $title ?>
+            </td>
             <td><?= htmlspecialchars($r['service_main'] ?? '') ?></td>
             <td><?= htmlspecialchars($r['service_sub'] ?? '') ?></td>
             <td><?= htmlspecialchars($r['news_type'] ?? '') ?></td>
