@@ -15,7 +15,7 @@ $backParams = [
     'filtered' => 1,
 ];
 
-$excelRow = ($date !== '' && $code !== '') ? excelRowFind($date, $code) : null;
+$excelRow = ($date !== '' && $code !== '') ? excelRowFind($date, $code, 'ایسنا') : null;
 if (!$excelRow) {
     die('این خبر در فایل اکسل پیدا نشد.');
 }
