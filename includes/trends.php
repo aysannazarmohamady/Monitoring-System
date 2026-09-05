@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/jsondb.php';
+require_once __DIR__ . '/helpers.php';
 
 // اولویت منابع مورد نظر: ابتدا ایسنا، سپس بقیه خبرگزاری‌های اصلی
 function trendsAgencyLabel(string $sourceText): ?string
@@ -64,6 +65,139 @@ function trendsSelectCoverage(array $newsItems): array
     return ['isna' => $isna, 'others' => $others];
 }
 
+// برای گزارش «همه رسانه‌ها»: از بین منابع خبری یک ترند (بدون محدودیت به خبرگزاری خاص)،
+// تعداد تکرار هر منبع را می‌شمارد و فقط منبع(هایی) با بیشترین میزان تکرار را نگه می‌دارد.
+function trendsSelectTopRepeatedCoverage(array $newsItems): array
+{
+    $bySource = [];
+    foreach ($newsItems as $ni) {
+        $src = trim($ni['source'] ?? '');
+        if ($src === '') continue;
+        if (!isset($bySource[$src])) {
+            $bySource[$src] = ['count' => 0, 'title' => $ni['title'], 'url' => $ni['url']];
+        }
+        $bySource[$src]['count']++;
+    }
+    if (empty($bySource)) return [];
+    $max = max(array_column($bySource, 'count'));
+    $out = [];
+    foreach ($bySource as $src => $d) {
+        if ($d['count'] === $max) {
+            $out[] = ['agency' => $src, 'title' => $d['title'], 'url' => $d['url']];
+        }
+    }
+    return $out;
+}
+
+// ذخیره‌ی آرشیو روزانه (تاریخ شمسی) ترندها با پوشش همه‌ی رسانه‌ها، برای صفحه‌ی گزارش ترندها
+function trendsArchiveDaily(array $trends): void
+{
+    $nowIran = new DateTime('now', new DateTimeZone('Asia/Tehran'));
+    [$jy, $jm, $jd] = gregorianToJalali((int)$nowIran->format('Y'), (int)$nowIran->format('n'), (int)$nowIran->format('j'));
+    $jdate = sprintf('%04d/%02d/%02d', $jy, $jm, $jd);
+    $fetchedAtLabel = jalaliDateLabel($jdate) . ' - ساعت ' . $nowIran->format('H:i') . ' (به وقت ایران)';
+    $items = [];
+    foreach ($trends as $t) {
+        $coverage = trendsSelectTopRepeatedCoverage($t['news_items']);
+        if (empty($coverage)) continue; // ترند بدون هیچ خبر مرتبطی نمایش داده نمی‌شود
+        $items[] = [
+            'keyword'  => $t['keyword'],
+            'traffic'  => $t['traffic'],
+            'coverage' => $coverage,
+        ];
+    }
+    jsonUpdate('google_trends_archive', function ($old) use ($jdate, $items, $fetchedAtLabel) {
+        $old[$jdate] = ['fetched_at' => $fetchedAtLabel, 'trends' => $items];
+        return $old;
+    });
+}
+
+// تبدیل متن میزان جست‌وجو (مثل «5000+» یا «10K+») به عدد قابل مقایسه برای سورت
+function trendsTrafficValue(string $traffic): int
+{
+    $t = strtolower(trim(str_replace(',', '', $traffic)));
+    if ($t === '') return 0;
+    if (preg_match('/([\d.]+)\s*(k|m)?/', $t, $m)) {
+        $num = (float)$m[1];
+        $mult = ($m[2] ?? '') === 'k' ? 1000 : (($m[2] ?? '') === 'm' ? 1000000 : 1);
+        return (int) round($num * $mult);
+    }
+    return 0;
+}
+
+// تمام تاریخ‌های شمسی بین دو تاریخ (شامل خودشان) را برمی‌گرداند
+function trendsJalaliDateRange(string $from, string $to): array
+{
+    [$fy, $fm, $fd] = array_map('intval', explode('/', $from));
+    [$ty, $tm, $td] = array_map('intval', explode('/', $to));
+    $start = j2d($fy, $fm, $fd);
+    $end = j2d($ty, $tm, $td);
+    if ($end < $start) { [$start, $end] = [$end, $start]; }
+    $out = [];
+    for ($jdn = $start; $jdn <= $end; $jdn++) {
+        $d = d2j($jdn);
+        $out[] = sprintf('%04d/%02d/%02d', $d['jy'], $d['jm'], $d['jd']);
+    }
+    return $out;
+}
+
+// ادغام ترندهای آرشیوشده در یک بازه‌ی تاریخی: هر ترند یک‌بار، پوشش رسانه‌ها از همه‌ی روزها جمع می‌شود
+// (خروجی بر اساس میزان جست‌وجو، نزولی مرتب شده است)
+function trendsGetRangeMerged(string $from, string $to): array
+{
+    $archive = jsonRead('google_trends_archive');
+    $dates = trendsJalaliDateRange($from, $to);
+    $merged = [];
+    foreach ($dates as $d) {
+        $day = $archive[$d] ?? null;
+        if (!$day) continue;
+        foreach ($day['trends'] ?? [] as $t) {
+            $kw = $t['keyword'] ?? '';
+            if ($kw === '') continue;
+            if (!isset($merged[$kw])) {
+                $merged[$kw] = ['keyword' => $kw, 'date' => $d, 'coverage' => [], 'traffic' => $t['traffic'] ?? ''];
+            } elseif (trendsTrafficValue($t['traffic'] ?? '') > trendsTrafficValue($merged[$kw]['traffic'])) {
+                $merged[$kw]['traffic'] = $t['traffic'];
+            }
+            foreach ($t['coverage'] ?? [] as $c) {
+                $ag = $c['agency'] ?? '';
+                if ($ag === '' || isset($merged[$kw]['coverage'][$ag])) continue;
+                $merged[$kw]['coverage'][$ag] = $c;
+            }
+        }
+    }
+    $out = array_values($merged);
+    usort($out, fn($a, $b) => trendsTrafficValue($b['traffic']) <=> trendsTrafficValue($a['traffic']));
+    foreach ($out as &$t) { $t['coverage'] = array_values($t['coverage']); }
+    unset($t);
+    return $out;
+}
+
+// حذف پوشش رسانه‌های غیر از ایسنا برای روزهای قدیمی‌تر از ۸ روز (فراخوانی از کران‌جاب)
+function trendsPruneOldNonIsna(): void
+{
+    $cutoff = new DateTime('now', new DateTimeZone('Asia/Tehran'));
+    $cutoff->modify('-8 days');
+    [$cy, $cm, $cd] = gregorianToJalali((int)$cutoff->format('Y'), (int)$cutoff->format('n'), (int)$cutoff->format('j'));
+    $cutoffJdn = j2d($cy, $cm, $cd);
+
+    jsonUpdate('google_trends_archive', function ($archive) use ($cutoffJdn) {
+        foreach ($archive as $jdate => $day) {
+            [$jy, $jm, $jd] = array_map('intval', explode('/', $jdate));
+            if (j2d($jy, $jm, $jd) > $cutoffJdn) continue; // فقط روزهای قدیمی‌تر از ۸ روز
+            $newTrends = [];
+            foreach ($day['trends'] ?? [] as $t) {
+                $isnaOnly = array_values(array_filter($t['coverage'] ?? [], fn($c) => mb_strpos($c['agency'] ?? '', 'ایسنا') !== false));
+                if (empty($isnaOnly)) continue; // ترندی که ایسنا پوشش نداده، از آرشیو قدیمی حذف می‌شود
+                $t['coverage'] = $isnaOnly;
+                $newTrends[] = $t;
+            }
+            $archive[$jdate]['trends'] = $newTrends;
+        }
+        return $archive;
+    });
+}
+
 // دریافت RSS از گوگل ترندز و ذخیره خروجی پردازش‌شده (برای اجرا توسط کران‌جاب)
 function trendsFetchAndStore(): array
 {
@@ -90,6 +224,7 @@ function trendsFetchAndStore(): array
     }
 
     $trends = trendsParseRss($xml);
+    trendsArchiveDaily($trends); // آرشیو روزانه‌ی همه‌رسانه‌ها؛ رفتار فعلی داشبورد را تغییر نمی‌دهد
     $result = [];
     foreach ($trends as $t) {
         $cov = trendsSelectCoverage($t['news_items']);
