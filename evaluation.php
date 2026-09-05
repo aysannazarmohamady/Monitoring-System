@@ -253,6 +253,26 @@ require __DIR__ . '/includes/layout_top.php';
     </div>
   </div>
 
+  <!-- وضعیت حضور ایسنا در ترندها -->
+  <div class="card shadow-sm p-4 mb-4">
+    <div class="row g-3 align-items-end mb-3">
+      <div class="col-md-6"><h6 class="mb-0">وضعیت حضور ایسنا در ترندها</h6></div>
+      <div class="col-md-2">
+        <label class="form-label">تعداد</label>
+        <select id="isnaTrendsLimit" class="form-select">
+          <option value="5" selected>۵</option>
+          <option value="10">۱۰</option>
+        </select>
+      </div>
+    </div>
+    <div class="table-responsive">
+      <table class="table table-sm table-hover align-middle sortable-table">
+        <thead><tr><th>عبارت ترند</th><th>تاریخ ترند</th><th>تیتر خبر ایسنا</th><th>خبرنگار</th><th>زیرسرویس</th><th>نوع خبر</th><th>بازدید</th></tr></thead>
+        <tbody id="isnaTrendsTable"></tbody>
+      </table>
+    </div>
+  </div>
+
   <!-- خبرنگاران -->
   <div class="card shadow-sm p-4 mb-4">
     <h6 class="mb-3">عملکرد خبرنگاران</h6>
@@ -546,6 +566,16 @@ function renderTopNewsTable(items){
     tbody.appendChild(tr);
   });
 }
+function renderIsnaTrendsTable(items){
+  const tbody = qs('isnaTrendsTable'); tbody.innerHTML = '';
+  if (!items.length){ tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">داده‌ای نیست</td></tr>'; return; }
+  items.forEach(it => {
+    const tr = document.createElement('tr');
+    const titleCell = it.url ? `<a href="${it.url}" target="_blank" rel="noopener">${it.title || '(بدون تیتر)'}</a>` : (it.title || '(بدون تیتر)');
+    tr.innerHTML = `<td>${it.keyword||'-'}</td><td>${it.date_label||'-'}</td><td>${titleCell}</td><td>${it.reporter||'-'}</td><td>${it.service_sub||'-'}</td><td>${it.news_type||'-'}</td><td>${it.views!==null ? Number(it.views).toLocaleString() : '-'}</td>`;
+    tbody.appendChild(tr);
+  });
+}
 
 // ===================== آمار کلی =====================
 
@@ -676,6 +706,13 @@ async function loadTopNews(){
   if (data.ok) renderTopNewsTable(data.items);
 }
 
+async function loadIsnaTrends(){
+  const {from, to} = currentRange();
+  const limit = qs('isnaTrendsLimit').value;
+  const data = await fetchJson({action:'isna_trends', from, to, limit});
+  if (data.ok) renderIsnaTrendsTable(data.items);
+}
+
 // ===================== خبرنگار / ناشر =====================
 
 async function loadPersonOptions(role){
@@ -797,7 +834,7 @@ async function refreshScope(){
   await loadNewsTypeOptionsForScope();
   await Promise.all([
     loadOverview(), loadHourly(), loadSubserviceOptions(), loadTopSubserviceOptions(),
-    loadPersonOptions('reporter'), loadPersonOptions('publisher'), loadTopNews(),
+    loadPersonOptions('reporter'), loadPersonOptions('publisher'), loadTopNews(), loadIsnaTrends(),
     loadQcOptions().then(loadQcSection),
   ]);
 }
@@ -835,6 +872,7 @@ qs('subType').addEventListener('change', loadSubserviceChart);
 qs('topLimit').addEventListener('change', loadTopNews);
 qs('topType').addEventListener('change', loadTopNews);
 qs('topSubservice').addEventListener('change', loadTopNews);
+qs('isnaTrendsLimit').addEventListener('change', loadIsnaTrends);
 qs('repName').addEventListener('change', () => loadPersonSection('reporter'));
 qs('repType').addEventListener('change', () => loadPersonSection('reporter'));
 qs('pubName').addEventListener('change', () => loadPersonSection('publisher'));

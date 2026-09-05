@@ -94,6 +94,7 @@ body{
           <ul class="dropdown-menu">
             <li><a class="dropdown-item" href="evaluation.php">ارزیابی خودکار</a></li>
             <li><a class="dropdown-item" href="topic_evaluation.php">ارزیابی موضوعی</a></li>
+            <li><a class="dropdown-item" href="trends_report.php">گزارش ترندها</a></li>
           </ul>
         </li>
         <li class="nav-item"><a class="nav-link" href="tasks.php">میز کار</a></li>

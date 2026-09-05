@@ -133,6 +133,46 @@ switch ($action) {
         echo json_encode(['ok' => true, 'items' => topViewedNews($rows, $limit)], JSON_UNESCAPED_UNICODE);
         break;
 
+    // ===== وضعیت حضور ایسنا در ترندهای گوگل =====
+
+    case 'isna_trends':
+        require_once __DIR__ . '/includes/trends.php';
+        $merged = trendsGetRangeMerged($from, $to);
+        $items = [];
+        foreach ($merged as $t) {
+            $isnaCov = null;
+            foreach ($t['coverage'] as $c) {
+                if (mb_strpos($c['agency'] ?? '', 'ایسنا') !== false) { $isnaCov = $c; break; }
+            }
+            if ($isnaCov === null) continue; // این ترند پوششی از ایسنا ندارد
+
+            // تطبیق تیتر خبر ایسنا (از فید گوگل‌ترندز) با تیترهای داخلی سیستم، بر اساس همپوشانی کلمات
+            $words = array_slice(preg_split('/\s+/u', trim($isnaCov['title'] ?? ''), -1, PREG_SPLIT_NO_EMPTY), 0, 6);
+            $matched = null;
+            if (!empty($words)) {
+                $candidates = rowsInRange($from, $to, '', '', '', '', '', '', $words, 'or');
+                $bestScore = 0;
+                foreach ($candidates as $row) {
+                    $score = 0;
+                    foreach ($words as $w) { if (mb_stripos($row['title'] ?? '', $w) !== false) $score++; }
+                    if ($score > $bestScore) { $bestScore = $score; $matched = $row; }
+                }
+            }
+
+            $items[] = [
+                'keyword'     => $t['keyword'],
+                'date_label'  => jalaliDateLabel($t['date']),
+                'title'       => $isnaCov['title'],
+                'url'         => $isnaCov['url'],
+                'reporter'    => $matched['reporter'] ?? null,
+                'service_sub' => $matched['service_sub'] ?? null,
+                'news_type'   => $matched['news_type'] ?? null,
+                'views'       => isset($matched['views']) ? (int)$matched['views'] : null,
+            ];
+        }
+        echo json_encode(['ok' => true, 'items' => array_slice($items, 0, $limit)], JSON_UNESCAPED_UNICODE);
+        break;
+
     // ===== بررسی کیفی (بر پایه داده‌های نظارت / news_entries) =====
 
     case 'qc_reporters':
