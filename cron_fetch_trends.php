@@ -6,6 +6,7 @@ require_once __DIR__ . '/includes/trends.php';
 
 try {
     $payload = trendsFetchAndStore();
+    trendsPruneOldNonIsna();
     echo date('Y-m-d H:i:s') . " OK - " . count($payload['trends']) . " ترند ذخیره شد.\n";
 } catch (Throwable $e) {
     echo date('Y-m-d H:i:s') . " ERROR - " . $e->getMessage() . "\n";
