@@ -94,7 +94,7 @@ require __DIR__ . '/includes/layout_top.php';
           <td><?= htmlspecialchars($e['subject'] ?? '') ?></td>
           <td><?= htmlspecialchars($r['news_type'] ?? '') ?><?= !empty($e['real_news_type']) ? ' / '.htmlspecialchars($e['real_news_type']) : '' ?></td>
           <td><?= htmlspecialchars($e['news_elements'] ?? '') ?></td>
-          <td><?= htmlspecialchars($e['source'] ?? '') ?></td>
+          <td><?= htmlspecialchars(($e['source'] ?? '') !== '' ? $e['source'] : ($r['source'] ?? '')) ?></td>
           <td><?= htmlspecialchars($e['description'] ?? '') ?></td>
           <td><?= !empty($r['news_link']) ? '<a href="'.htmlspecialchars($r['news_link']).'" target="_blank">لینک</a>' : '' ?></td>
           <td><?= htmlspecialchars($e['tag'] ?? '') ?></td>
