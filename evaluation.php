@@ -611,15 +611,44 @@ async function loadAdvFilterOptions(){
   qs(id).addEventListener('change', () => { if (qs('reportArea').style.display !== 'none') refreshScope(); });
 });
 
-async function fetchJson(params){
+// درخواست‌هایی که هم‌زمان (در یک لحظه) ارسال می‌شوند، در یک درخواست batch ادغام می‌شوند
+// تا سرور فایل‌های داده را فقط یک‌بار بخواند. اگر batch شکست بخورد، تک‌تک ارسال می‌شوند.
+let _fetchQueue = [], _fetchTimer = null;
+
+async function fetchJsonSingle(params){
   const usp = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
     if (Array.isArray(v)) v.forEach(item => usp.append(k + '[]', item));
     else usp.append(k, v);
   });
-  const url = API + '?' + usp.toString();
-  const res = await fetch(url);
+  const res = await fetch(API + '?' + usp.toString());
   return res.json();
+}
+
+function fetchJson(params){
+  return new Promise((resolve, reject) => {
+    _fetchQueue.push({params, resolve, reject});
+    if (!_fetchTimer) _fetchTimer = setTimeout(flushFetchQueue, 5);
+  });
+}
+
+async function flushFetchQueue(){
+  const queue = _fetchQueue; _fetchQueue = []; _fetchTimer = null;
+  if (queue.length === 0) return;
+  const runSingles = () => queue.forEach(q => fetchJsonSingle(q.params).then(q.resolve, q.reject));
+  if (queue.length === 1){ runSingles(); return; }
+  try {
+    const res = await fetch(API + '?action=batch', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({requests: queue.map(q => q.params)})
+    });
+    const data = await res.json();
+    if (!data || !Array.isArray(data.results) || data.results.length !== queue.length) throw new Error('bad batch');
+    queue.forEach((q, i) => q.resolve(data.results[i]));
+  } catch (e) {
+    runSingles();
+  }
 }
 
 function fillSelect(sel, items, placeholder, keepValue){
