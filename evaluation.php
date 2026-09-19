@@ -455,8 +455,13 @@ button.bf-header{
 
   <!-- بررسی کیفی -->
   <div class="card shadow-sm p-4 mb-4">
-    <h6 class="mb-3">بررسی کیفی (خروجی بررسی‌های نظارت)</h6>
-    <p class="text-muted small">این بخش از داده‌های ثبت‌شده در بخش «نظارت» (ثبت خبر روزانه) استفاده می‌کند و بازه/سرویسِ بالای صفحه روی آن هم اعمال می‌شود.</p>
+    <h6 class="mb-0">
+      <button class="btn btn-link text-decoration-none p-0 w-100 d-flex justify-content-between align-items-center fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#qcBody" aria-expanded="false" aria-controls="qcBody">
+        <span>بررسی کیفی (خروجی بررسی‌های نظارت)</span><span class="small text-muted">برای مشاهده کلیک کنید ▾</span>
+      </button>
+    </h6>
+    <div class="collapse" id="qcBody">
+    <p class="text-muted small mt-3">این بخش از داده‌های ثبت‌شده در بخش «نظارت» (ثبت خبر روزانه) استفاده می‌کند و بازه/سرویسِ بالای صفحه روی آن هم اعمال می‌شود.</p>
     <div class="row g-3 mb-3">
       <div class="col-md-4">
         <label class="form-label">فیلتر زیرسرویس</label>
@@ -497,6 +502,7 @@ button.bf-header{
         <tbody id="qcItemsTable"></tbody>
       </table>
     </div>
+    </div><!-- /#qcBody -->
   </div>
 
 </div>
@@ -1079,6 +1085,18 @@ async function loadQcSection(){
 
 // ===================== هماهنگ‌کننده کلی =====================
 
+// بارگذاری تنبل «بررسی کیفی»: فقط وقتی باکس باز باشد؛ در غیر این صورت فقط علامت «کهنه» می‌خورد
+let qcStale = true;
+function qcIsOpen(){ return qs('qcBody').classList.contains('show'); }
+async function loadQcAll(){
+  qcStale = false;
+  await loadQcOptions();
+  await loadQcSection();
+}
+qs('qcBody').addEventListener('shown.bs.collapse', () => {
+  if (qcStale && qs('reportArea').style.display !== 'none') loadQcAll();
+});
+
 async function loadNewsTypeOptionsForScope(){
   const {from, to} = currentRange();
   const service = currentService();
@@ -1095,8 +1113,9 @@ async function refreshScope(){
   await Promise.all([
     loadOverview(), loadHourly(), loadWordcloud(), loadSubserviceOptions(), loadTopSubserviceOptions(),
     loadPersonOptions('reporter'), loadPersonOptions('publisher'), loadTopNews(), loadIsnaTrends(),
-    loadQcOptions().then(loadQcSection),
   ]);
+  qcStale = true;
+  if (qcIsOpen()) loadQcAll();
 }
 
 async function onSiteChange(){
