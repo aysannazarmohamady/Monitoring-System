@@ -359,11 +359,8 @@ function advFiltersMatch(array $r, array $advReporters, array $advPublishers, ar
 
 function rowsInRange(string $from, string $to, string $service = '', string $role = '', string $name = '', string $newsType = '', string $subservice = '', string $site = '', array $titleKeywords = [], string $keywordMode = 'and', array $timePeriods = [], array $advReporters = [], array $advPublishers = [], array $advNewsTypes = []): array
 {
-    static $memo = [];
-    $memoKey = jsonDataVersion() . '|' . md5(serialize(func_get_args()));
-    if (isset($memo[$memoKey])) return $memo[$memoKey];
     $activeFileIds = excelActiveFileIds();
-    if (empty($activeFileIds)) return $memo[$memoKey] = [];
+    if (empty($activeFileIds)) return [];
     $kws = array_values(array_filter(array_map('trim', $titleKeywords), fn($w) => $w !== ''));
     $tps = array_values(array_intersect($timePeriods, TIME_PERIOD_LABELS));
     $out = [];
@@ -386,7 +383,7 @@ function rowsInRange(string $from, string $to, string $service = '', string $rol
         if (!advFiltersMatch($r, $advReporters, $advPublishers, $advNewsTypes)) continue;
         $out[] = $r;
     }
-    return $memo[$memoKey] = $out;
+    return $out;
 }
 
 // بررسی می‌کند تیتر با مجموعه کلمات/عبارات کاربر مطابقت دارد یا نه (mode: 'and' یا 'or')
@@ -585,9 +582,6 @@ function topViewedNews(array $rows, int $limit): array
 // ردیف‌های نظارت (news_entries) در یک بازه، با فیلتر سرویس/زیرسرویس/خبرنگار/نوع خبر
 function newsEntriesInRange(string $from, string $to, string $service = '', string $subservice = '', string $reporter = '', string $newsType = '', string $site = '', array $titleKeywords = [], string $keywordMode = 'and', array $advReporters = [], array $advPublishers = [], array $advNewsTypes = []): array
 {
-    static $memo = [];
-    $memoKey = jsonDataVersion() . '|' . md5(serialize(func_get_args()));
-    if (isset($memo[$memoKey])) return $memo[$memoKey];
     $kws = array_values(array_filter(array_map('trim', $titleKeywords), fn($w) => $w !== ''));
     $out = array_values(array_filter(jsonRead('news_entries'), function ($r) use ($from, $to, $service, $subservice, $reporter, $newsType, $site, $kws, $keywordMode, $advReporters, $advPublishers, $advNewsTypes) {
         $d = $r['entry_date'] ?? '';
@@ -602,7 +596,7 @@ function newsEntriesInRange(string $from, string $to, string $service = '', stri
         return true;
     }));
     usort($out, fn($a, $b) => ($b['entry_date'] ?? '') <=> ($a['entry_date'] ?? '') ?: ($b['id'] ?? 0) <=> ($a['id'] ?? 0));
-    return $memo[$memoKey] = $out;
+    return $out;
 }
 
 // آیا نوع خبر (news_type) با نوع واقعی خبر (real_news_type، متن آزاد) هم‌خوانی دارد؛ مقایسه به‌صورت فازی (شامل‌بودن رشته)
