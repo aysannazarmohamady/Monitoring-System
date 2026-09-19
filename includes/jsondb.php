@@ -24,6 +24,14 @@ function jsonPath(string $name): string
 // بدون این کش، هر بار jsonRead('excel_rows') صدا زده می‌شود (که در یک بارگذاری صفحه‌ی
 // «ارزیابی» ده‌ها بار اتفاق می‌افتد) کل فایل چندمگابایتی از دیسک خوانده و JSON-دیکد می‌شود؛
 // همین باعث کندی/تایم‌اوت و خالی ماندن بخش‌هایی از گزارش می‌شد.
+// شماره‌ی نسخه‌ی داده در طول همین درخواست؛ با هر نوشتن افزایش می‌یابد تا کش نتیجه‌ی فیلترها کهنه نشود.
+function jsonDataVersion(bool $bump = false): int
+{
+    static $v = 0;
+    if ($bump) $v++;
+    return $v;
+}
+
 function &jsonCacheRef(): array
 {
     static $store = [];
@@ -88,6 +96,7 @@ function jsonUpdate(string $name, callable $mutator): array
 
     $cache = &jsonCacheRef();
     $cache[$name] = $newData;
+    jsonDataVersion(true);
     return $newData;
 }
 
