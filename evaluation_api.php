@@ -6,314 +6,289 @@ requireLoginApi();
 
 header('Content-Type: application/json; charset=utf-8');
 
-// منطق اصلی API داخل یک تابع است تا هم به‌صورت تکی (GET) و هم چندتایی (batch) قابل اجرا باشد.
-function evalHandle(array $_G): void
-{
-    $action = $_G['action'] ?? '';
-    $from = normalizeJalaliDate($_G['from'] ?? '') ?? '';
-    $to   = normalizeJalaliDate($_G['to'] ?? '') ?? '';
-    $site        = trim($_G['site'] ?? '');
-    // فیلتر سرویس چندانتخابی: چند سرویس می‌توانند هم‌زمان انتخاب شوند
-    $serviceRaw  = $_G['service'] ?? '';
-    if (!is_array($serviceRaw)) $serviceRaw = [$serviceRaw];
-    $services    = array_values(array_unique(array_filter(array_map('trim', $serviceRaw), fn($s) => $s !== '')));
-    $service     = implode(',', $services);
-    $subservice  = trim($_G['subservice'] ?? '');
-    $granularity = ($_G['granularity'] ?? 'day') === 'month' ? 'month' : 'day';
-    $role     = ($_G['role'] ?? '') === 'publisher' ? 'publisher' : 'reporter';
-    $name     = trim($_G['name'] ?? '');
-    $reporter = trim($_G['reporter'] ?? '');
-    $newsType = trim($_G['news_type'] ?? '');
-    $limit    = (int)($_G['limit'] ?? 10);
-    if (!in_array($limit, [5, 10, 15, 20, 30], true)) $limit = 10;
+$action = $_GET['action'] ?? '';
+$from = normalizeJalaliDate($_GET['from'] ?? '') ?? '';
+$to   = normalizeJalaliDate($_GET['to'] ?? '') ?? '';
+$site        = trim($_GET['site'] ?? '');
+// فیلتر سرویس چندانتخابی: چند سرویس می‌توانند هم‌زمان انتخاب شوند
+$serviceRaw  = $_GET['service'] ?? '';
+if (!is_array($serviceRaw)) $serviceRaw = [$serviceRaw];
+$services    = array_values(array_unique(array_filter(array_map('trim', $serviceRaw), fn($s) => $s !== '')));
+$service     = implode(',', $services);
+$subservice  = trim($_GET['subservice'] ?? '');
+$granularity = ($_GET['granularity'] ?? 'day') === 'month' ? 'month' : 'day';
+$role     = ($_GET['role'] ?? '') === 'publisher' ? 'publisher' : 'reporter';
+$name     = trim($_GET['name'] ?? '');
+$reporter = trim($_GET['reporter'] ?? '');
+$newsType = trim($_GET['news_type'] ?? '');
+$limit    = (int)($_GET['limit'] ?? 10);
+if (!in_array($limit, [5, 10, 15, 20, 30], true)) $limit = 10;
 
-    // فیلتر سراسری «جست‌وجو در تیتر»: هر چند کلمه/عبارت که کاربر جداگانه اضافه کرده باشد (AND)
-    $keywordsRaw = $_G['keyword'] ?? [];
-    if (!is_array($keywordsRaw)) $keywordsRaw = [$keywordsRaw];
-    $keywords = array_values(array_filter(array_map('trim', $keywordsRaw), function($w) { return $w !== ''; }));
-    $keywordMode = ($_G['keyword_mode'] ?? 'and') === 'or' ? 'or' : 'and';
+// فیلتر سراسری «جست‌وجو در تیتر»: هر چند کلمه/عبارت که کاربر جداگانه اضافه کرده باشد (AND)
+$keywordsRaw = $_GET['keyword'] ?? [];
+if (!is_array($keywordsRaw)) $keywordsRaw = [$keywordsRaw];
+$keywords = array_values(array_filter(array_map('trim', $keywordsRaw), function($w) { return $w !== ''; }));
+$keywordMode = ($_GET['keyword_mode'] ?? 'and') === 'or' ? 'or' : 'and';
 
-    // فیلتر «بازه زمانی انتشار» (بامدادی/صبحگاهی/ظهرگاهی/شامگاهی): می‌تواند چند مقدار همزمان انتخاب شود
-    $timePeriodsRaw = $_G['time_period'] ?? [];
-    if (!is_array($timePeriodsRaw)) $timePeriodsRaw = [$timePeriodsRaw];
-    $timePeriods = array_values(array_intersect(array_map('trim', $timePeriodsRaw), TIME_PERIOD_LABELS));
+// فیلتر «بازه زمانی انتشار» (بامدادی/صبحگاهی/ظهرگاهی/شامگاهی): می‌تواند چند مقدار همزمان انتخاب شود
+$timePeriodsRaw = $_GET['time_period'] ?? [];
+if (!is_array($timePeriodsRaw)) $timePeriodsRaw = [$timePeriodsRaw];
+$timePeriods = array_values(array_intersect(array_map('trim', $timePeriodsRaw), TIME_PERIOD_LABELS));
 
-    // فیلترهای پیشرفته سراسری (چندانتخابی): خبرنگار، ناشر، نوع خبر - روی کل صفحه اعمال می‌شوند
-    $advReportersRaw = $_G['adv_reporter'] ?? [];
-    if (!is_array($advReportersRaw)) $advReportersRaw = [$advReportersRaw];
-    $advReporters = array_values(array_filter(array_map('trim', $advReportersRaw), fn($s) => $s !== ''));
+// فیلترهای پیشرفته سراسری (چندانتخابی): خبرنگار، ناشر، نوع خبر - روی کل صفحه اعمال می‌شوند
+$advReportersRaw = $_GET['adv_reporter'] ?? [];
+if (!is_array($advReportersRaw)) $advReportersRaw = [$advReportersRaw];
+$advReporters = array_values(array_filter(array_map('trim', $advReportersRaw), fn($s) => $s !== ''));
 
-    $advPublishersRaw = $_G['adv_publisher'] ?? [];
-    if (!is_array($advPublishersRaw)) $advPublishersRaw = [$advPublishersRaw];
-    $advPublishers = array_values(array_filter(array_map('trim', $advPublishersRaw), fn($s) => $s !== ''));
+$advPublishersRaw = $_GET['adv_publisher'] ?? [];
+if (!is_array($advPublishersRaw)) $advPublishersRaw = [$advPublishersRaw];
+$advPublishers = array_values(array_filter(array_map('trim', $advPublishersRaw), fn($s) => $s !== ''));
 
-    $advNewsTypesRaw = $_G['adv_news_type'] ?? [];
-    if (!is_array($advNewsTypesRaw)) $advNewsTypesRaw = [$advNewsTypesRaw];
-    $advNewsTypes = array_values(array_filter(array_map('trim', $advNewsTypesRaw), fn($s) => $s !== ''));
+$advNewsTypesRaw = $_GET['adv_news_type'] ?? [];
+if (!is_array($advNewsTypesRaw)) $advNewsTypesRaw = [$advNewsTypesRaw];
+$advNewsTypes = array_values(array_filter(array_map('trim', $advNewsTypesRaw), fn($s) => $s !== ''));
 
-    if ($from === '' || $to === '') {
-        echo json_encode(['ok' => false, 'error' => 'بازه تاریخ نامعتبر است.'], JSON_UNESCAPED_UNICODE);
-        return;
-    }
-    if ($from > $to) { [$from, $to] = [$to, $from]; }
-
-    switch ($action) {
-
-        // ===== آمار عملکرد سرویس‌ها (پورت‌شده از ایسنا) =====
-
-        case 'sites':
-            echo json_encode(['ok' => true, 'items' => distinctValuesInRange($from, $to, 'site')], JSON_UNESCAPED_UNICODE);
-            break;
-
-        case 'services':
-            echo json_encode(['ok' => true, 'items' => distinctValuesInRange($from, $to, 'service_main', '', $site, [], $advReporters, $advPublishers, $advNewsTypes)], JSON_UNESCAPED_UNICODE);
-            break;
-
-        case 'news_types':
-            echo json_encode(['ok' => true, 'items' => distinctValuesInRange($from, $to, 'news_type', $service, $site, $timePeriods, $advReporters, $advPublishers, $advNewsTypes)], JSON_UNESCAPED_UNICODE);
-            break;
-
-        case 'subservices':
-            if (count($services) === 0) { echo json_encode(['ok' => false, 'error' => 'ابتدا یک یا چند سرویس مشخص انتخاب کنید.'], JSON_UNESCAPED_UNICODE); break; }
-            echo json_encode(['ok' => true, 'items' => distinctValuesInRange($from, $to, 'service_sub', $service, $site, $timePeriods, $advReporters, $advPublishers, $advNewsTypes)], JSON_UNESCAPED_UNICODE);
-            break;
-
-        // ===== گزینه‌های فیلترهای پیشرفته: بر اساس فیلترهای پایه (بازه/سرویس/سایت/جست‌وجو/بازه انتشار) =====
-        case 'adv_options':
-            $baseRows = rowsInRange($from, $to, $service, '', '', '', '', $site, $keywords, $keywordMode, $timePeriods);
-            $repSet = []; $pubSet = []; $typeSet = [];
-            foreach ($baseRows as $r) {
-                $rep = trim((string)($r['reporter'] ?? '')); if ($rep !== '') $repSet[$rep] = true;
-                $pub = trim((string)($r['publisher'] ?? '')); if ($pub !== '') $pubSet[$pub] = true;
-                $nt  = trim((string)($r['news_type'] ?? '')); if ($nt !== '') $typeSet[$nt] = true;
-            }
-            $reporters = array_keys($repSet); sort($reporters, SORT_FLAG_CASE | SORT_STRING);
-            $publishers = array_keys($pubSet); sort($publishers, SORT_FLAG_CASE | SORT_STRING);
-            $newsTypesList = array_keys($typeSet); sort($newsTypesList, SORT_FLAG_CASE | SORT_STRING);
-            echo json_encode(['ok' => true, 'reporters' => $reporters, 'publishers' => $publishers, 'news_types' => $newsTypesList], JSON_UNESCAPED_UNICODE);
-            break;
-
-        case 'persons':
-            $rows = rowsInRange($from, $to, $service, '', '', '', '', $site, $keywords, $keywordMode, $timePeriods, $advReporters, $advPublishers, $advNewsTypes);
-            $field = $role === 'publisher' ? 'publisher' : 'reporter';
-            $list = [];
-            foreach ($rows as $r) {
-                $v = trim((string)($r[$field] ?? ''));
-                if ($v !== '') $list[$v] = ($list[$v] ?? 0) + 1;
-            }
-            arsort($list);
-            echo json_encode(['ok' => true, 'items' => array_keys($list)], JSON_UNESCAPED_UNICODE);
-            break;
-
-        case 'overview':
-            $allRows = rowsInRange($from, $to, '', '', '', '', '', $site, $keywords, $keywordMode, $timePeriods, $advReporters, $advPublishers, $advNewsTypes);
-            $scopeRows = $service !== '' ? rowsInRange($from, $to, $service, '', '', '', '', $site, $keywords, $keywordMode, $timePeriods, $advReporters, $advPublishers, $advNewsTypes) : $allRows;
-            $totalAll = count($allRows);
-            $totalScope = count($scopeRows);
-            $sumViews = array_sum(array_column($scopeRows, 'views'));
-            $sumViewsAll = array_sum(array_column($allRows, 'views'));
-            echo json_encode([
-                'ok' => true,
-                'total_all'      => $totalAll,
-                'total_scope'    => $totalScope,
-                'share_percent'  => ($service !== '' && $totalAll > 0) ? round($totalScope * 100 / $totalAll, 1) : null,
-                'avg_views'      => $totalScope > 0 ? round($sumViews / $totalScope, 1) : 0,
-                'sum_views'      => $sumViews,
-                'sum_views_share_percent' => ($service !== '' && $sumViewsAll > 0) ? round($sumViews * 100 / $sumViewsAll, 1) : null,
-                'series'         => buildSeries($scopeRows, $granularity),
-                'type_pie'       => typeBreakdownTable($scopeRows),
-                'type_avg_views' => typeAvgViewsTable($scopeRows),
-                'type_top_reporter_pie' => typeTopReporterPie($scopeRows),
-                'top_reporters_type_breakdown' => topReportersTypeBreakdown($scopeRows, 10),
-            ], JSON_UNESCAPED_UNICODE);
-            break;
-
-        case 'hourly':
-            $rows = rowsInRange($from, $to, $service, '', '', $newsType, '', $site, $keywords, $keywordMode, $timePeriods, $advReporters, $advPublishers, $advNewsTypes);
-            echo json_encode(['ok' => true, 'series' => buildHourlySeries($rows)], JSON_UNESCAPED_UNICODE);
-            break;
-
-        case 'subservice_series':
-            if ($service === '' || $subservice === '') { echo json_encode(['ok' => false, 'error' => 'سرویس یا زیرسرویس انتخاب نشده است.'], JSON_UNESCAPED_UNICODE); break; }
-            $allRows = rowsInRange($from, $to, $service, '', '', '', $subservice, $site, $keywords, $keywordMode, $timePeriods, $advReporters, $advPublishers, $advNewsTypes);
-            $chartRows = $newsType !== '' ? array_values(array_filter($allRows, function($r) use ($newsType) { return ($r['news_type'] ?? '') === $newsType; })) : $allRows;
-            echo json_encode([
-                'ok' => true,
-                'series' => buildSeries($chartRows, $granularity),
-                'type_table' => typeBreakdownTable($allRows),
-                'total_count' => count($chartRows),
-                'total_avg_views' => count($chartRows) ? round(array_sum(array_column($chartRows, 'views')) / count($chartRows), 1) : 0,
-            ], JSON_UNESCAPED_UNICODE);
-            break;
-
-        case 'person_series':
-            if ($name === '') { echo json_encode(['ok' => false, 'error' => 'نامی انتخاب نشده است.'], JSON_UNESCAPED_UNICODE); break; }
-            $allRows = rowsInRange($from, $to, $service, $role, $name, '', '', $site, $keywords, $keywordMode, $timePeriods, $advReporters, $advPublishers, $advNewsTypes);
-            $chartRows = $newsType !== '' ? array_values(array_filter($allRows, function($r) use ($newsType) { return ($r['news_type'] ?? '') === $newsType; })) : $allRows;
-            echo json_encode([
-                'ok' => true,
-                'series' => buildSeries($chartRows, $granularity),
-                'type_table' => typeBreakdownTable($allRows),
-                'total_count' => count($chartRows),
-                'total_avg_views' => count($chartRows) ? round(array_sum(array_column($chartRows, 'views')) / count($chartRows), 1) : 0,
-            ], JSON_UNESCAPED_UNICODE);
-            break;
-
-        case 'top_news':
-            $rows = rowsInRange($from, $to, $service, '', '', $newsType, $subservice, $site, $keywords, $keywordMode, $timePeriods, $advReporters, $advPublishers, $advNewsTypes);
-            echo json_encode(['ok' => true, 'items' => topViewedNews($rows, $limit)], JSON_UNESCAPED_UNICODE);
-            break;
-
-        // ===== وضعیت حضور ایسنا در ترندهای گوگل =====
-
-        case 'isna_trends':
-            require_once __DIR__ . '/includes/trends.php';
-            $merged = trendsGetRangeMerged($from, $to);
-            $items = [];
-            foreach ($merged as $t) {
-                $isnaCov = null;
-                foreach ($t['coverage'] as $c) {
-                    if (mb_strpos($c['agency'] ?? '', 'ایسنا') !== false) { $isnaCov = $c; break; }
-                }
-                if ($isnaCov === null) continue; // این ترند پوششی از ایسنا ندارد
-
-                // تطبیق دقیق خبر ایسنا از طریق «تیتر عیناً یکسان» با ردیف‌های داخلی (بدون محدودیت به بازهٔ تاریخی گزارش،
-                // چون تاریخ واقعی خبر می‌تواند با تاریخ ترند یکی نباشد)
-                $normTitle = function (string $s): string {
-                    $s = normalizePersianChars(trim($s));
-                    $s = preg_replace('/\s+/u', ' ', $s);
-                    return $s;
-                };
-                $targetTitle = $normTitle($isnaCov['title'] ?? '');
-                $matched = null;
-                if ($targetTitle !== '') {
-                    $activeFileIds = excelActiveFileIds();
-                    foreach (jsonRead('excel_rows') as $row) {
-                        if (!isset($activeFileIds[(int)($row['file_id'] ?? 0)])) continue;
-                        if (($row['site'] ?? '') !== 'ایسنا') continue;
-                        if ($normTitle((string)($row['title'] ?? '')) === $targetTitle) { $matched = $row; break; }
-                    }
-                }
-
-                $items[] = [
-                    'keyword'     => $t['keyword'],
-                    'date_label'  => jalaliDateLabel($t['date']),
-                    'title'       => $isnaCov['title'],
-                    'url'         => $isnaCov['url'],
-                    'reporter'    => $matched['reporter'] ?? null,
-                    'service_sub' => $matched['service_sub'] ?? null,
-                    'news_type'   => $matched['news_type'] ?? null,
-                    'views'       => isset($matched['views']) ? (int)$matched['views'] : null,
-                ];
-            }
-            echo json_encode(['ok' => true, 'items' => array_slice($items, 0, $limit)], JSON_UNESCAPED_UNICODE);
-            break;
-
-        // ===== بررسی کیفی (بر پایه داده‌های نظارت / news_entries) =====
-
-        case 'qc_reporters':
-            $set = [];
-            foreach (newsEntriesInRange($from, $to, $service, '', '', '', $site, $keywords, $keywordMode, $advReporters, $advPublishers, $advNewsTypes) as $r) {
-                $v = trim((string)($r['reporter'] ?? ''));
-                if ($v !== '') $set[$v] = true;
-            }
-            $list = array_keys($set);
-            sort($list, SORT_FLAG_CASE | SORT_STRING);
-            echo json_encode(['ok' => true, 'items' => $list], JSON_UNESCAPED_UNICODE);
-            break;
-
-        case 'qc_news_types':
-            $set = [];
-            foreach (newsEntriesInRange($from, $to, $service, '', '', '', $site, $keywords, $keywordMode, $advReporters, $advPublishers, $advNewsTypes) as $r) {
-                $v = trim((string)($r['news_type'] ?? ''));
-                if ($v !== '') $set[$v] = true;
-            }
-            $list = array_keys($set);
-            sort($list, SORT_FLAG_CASE | SORT_STRING);
-            echo json_encode(['ok' => true, 'items' => $list], JSON_UNESCAPED_UNICODE);
-            break;
-
-        case 'qc_summary':
-            $reviewed = newsEntriesInRange($from, $to, $service, $subservice, $reporter, $newsType, $site, $keywords, $keywordMode, $advReporters, $advPublishers, $advNewsTypes);
-            $totalRows = rowsInRange($from, $to, $service, $reporter !== '' ? 'reporter' : '', $reporter, $newsType, $subservice, $site, $keywords, $keywordMode, [], $advReporters, $advPublishers, $advNewsTypes);
-            $reviewedCount = count($reviewed);
-            $totalCount = count($totalRows);
-            echo json_encode([
-                'ok' => true,
-                'reviewed_count' => $reviewedCount,
-                'total_count'    => $totalCount,
-                'coverage_percent' => $totalCount > 0 ? round($reviewedCount * 100 / $totalCount, 1) : null,
-            ], JSON_UNESCAPED_UNICODE);
-            break;
-
-        case 'qc_items':
-            $reviewed = newsEntriesInRange($from, $to, $service, $subservice, $reporter, $newsType, $site, $keywords, $keywordMode, $advReporters, $advPublishers, $advNewsTypes);
-            $items = [];
-            foreach ($reviewed as $r) {
-                $items[] = [
-                    'title'          => $r['title'] ?? '',
-                    'site'           => $r['site'] ?? '',
-                    'service_main'   => $r['service_main'] ?? '',
-                    'service_sub'    => $r['service_sub'] ?? '',
-                    'news_type'      => $r['news_type'] ?? '',
-                    'real_news_type' => $r['real_news_type'] ?? '',
-                    'views'          => newsEntryViews($r),
-                    'reporter'       => $r['reporter'] ?? '',
-                    'publisher'      => $r['publisher'] ?? '',
-                    'link'           => $r['news_link'] ?? '',
-                    'date'           => $r['entry_date'] ?? '',
-                ];
-            }
-            echo json_encode(['ok' => true, 'items' => $items], JSON_UNESCAPED_UNICODE);
-            break;
-
-        case 'qc_match':
-            $reviewed = newsEntriesInRange($from, $to, $service, $subservice, $reporter, $newsType, $site, $keywords, $keywordMode, $advReporters, $advPublishers, $advNewsTypes);
-            $match = 0; $mismatch = 0; $incomplete = 0;
-            foreach ($reviewed as $r) {
-                $nt = trim((string)($r['news_type'] ?? ''));
-                $rt = trim((string)($r['real_news_type'] ?? ''));
-                if ($nt === '' || $rt === '') { $incomplete++; continue; }
-                if (newsElementsMatchType($r)) $match++; else $mismatch++;
-            }
-            echo json_encode(['ok' => true, 'items' => [
-                ['label' => 'تطابق دارد', 'count' => $match],
-                ['label' => 'تطابق ندارد', 'count' => $mismatch],
-                ['label' => 'اطلاعات ناقص', 'count' => $incomplete],
-            ]], JSON_UNESCAPED_UNICODE);
-            break;
-
-        case 'qc_elements':
-            $reviewed = newsEntriesInRange($from, $to, $service, $subservice, $reporter, $newsType, $site, $keywords, $keywordMode, $advReporters, $advPublishers, $advNewsTypes);
-            $counts = ['رعایت شده است' => 0, 'رعایت نشده است' => 0, 'سایر' => 0, 'ثبت نشده' => 0];
-            foreach ($reviewed as $r) { $counts[newsElementsStatus($r)]++; }
-            $items = [];
-            foreach ($counts as $label => $cnt) { $items[] = ['label' => $label, 'count' => $cnt]; }
-            echo json_encode(['ok' => true, 'items' => $items], JSON_UNESCAPED_UNICODE);
-            break;
-
-        default:
-            echo json_encode(['ok' => false, 'error' => 'عملیات نامعتبر.'], JSON_UNESCAPED_UNICODE);
-    }
+if ($from === '' || $to === '') {
+    echo json_encode(['ok' => false, 'error' => 'بازه تاریخ نامعتبر است.'], JSON_UNESCAPED_UNICODE);
+    exit;
 }
+if ($from > $to) { [$from, $to] = [$to, $from]; }
 
-// حالت batch: چند درخواست در یک درخواست HTTP اجرا می‌شود؛ فایل‌های داده فقط یک‌بار خوانده می‌شوند.
-if (($_GET['action'] ?? '') === 'batch') {
-    $payload = json_decode((string)file_get_contents('php://input'), true);
-    $reqs = is_array($payload['requests'] ?? null) ? array_slice($payload['requests'], 0, 40) : [];
-    $outs = [];
-    foreach ($reqs as $q) {
-        ob_start();
-        try {
-            evalHandle(is_array($q) ? $q : []);
-        } catch (Throwable $e) {
-            ob_clean();
-            echo json_encode(['ok' => false, 'error' => 'خطای داخلی سرور.'], JSON_UNESCAPED_UNICODE);
+switch ($action) {
+
+    // ===== آمار عملکرد سرویس‌ها (پورت‌شده از ایسنا) =====
+
+    case 'sites':
+        echo json_encode(['ok' => true, 'items' => distinctValuesInRange($from, $to, 'site')], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case 'services':
+        echo json_encode(['ok' => true, 'items' => distinctValuesInRange($from, $to, 'service_main', '', $site, [], $advReporters, $advPublishers, $advNewsTypes)], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case 'news_types':
+        echo json_encode(['ok' => true, 'items' => distinctValuesInRange($from, $to, 'news_type', $service, $site, $timePeriods, $advReporters, $advPublishers, $advNewsTypes)], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case 'subservices':
+        if (count($services) === 0) { echo json_encode(['ok' => false, 'error' => 'ابتدا یک یا چند سرویس مشخص انتخاب کنید.'], JSON_UNESCAPED_UNICODE); break; }
+        echo json_encode(['ok' => true, 'items' => distinctValuesInRange($from, $to, 'service_sub', $service, $site, $timePeriods, $advReporters, $advPublishers, $advNewsTypes)], JSON_UNESCAPED_UNICODE);
+        break;
+
+    // ===== گزینه‌های فیلترهای پیشرفته: بر اساس فیلترهای پایه (بازه/سرویس/سایت/جست‌وجو/بازه انتشار) =====
+    case 'adv_options':
+        $baseRows = rowsInRange($from, $to, $service, '', '', '', '', $site, $keywords, $keywordMode, $timePeriods);
+        $repSet = []; $pubSet = []; $typeSet = [];
+        foreach ($baseRows as $r) {
+            $rep = trim((string)($r['reporter'] ?? '')); if ($rep !== '') $repSet[$rep] = true;
+            $pub = trim((string)($r['publisher'] ?? '')); if ($pub !== '') $pubSet[$pub] = true;
+            $nt  = trim((string)($r['news_type'] ?? '')); if ($nt !== '') $typeSet[$nt] = true;
         }
-        $o = trim((string)ob_get_clean());
-        $outs[] = ($o !== '' && $o[0] === '{') ? $o : '{"ok":false,"error":"پاسخ نامعتبر."}';
-    }
-    echo '{"ok":true,"results":[' . implode(',', $outs) . ']}';
-} else {
-    evalHandle($_GET);
+        $reporters = array_keys($repSet); sort($reporters, SORT_FLAG_CASE | SORT_STRING);
+        $publishers = array_keys($pubSet); sort($publishers, SORT_FLAG_CASE | SORT_STRING);
+        $newsTypesList = array_keys($typeSet); sort($newsTypesList, SORT_FLAG_CASE | SORT_STRING);
+        echo json_encode(['ok' => true, 'reporters' => $reporters, 'publishers' => $publishers, 'news_types' => $newsTypesList], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case 'persons':
+        $rows = rowsInRange($from, $to, $service, '', '', '', '', $site, $keywords, $keywordMode, $timePeriods, $advReporters, $advPublishers, $advNewsTypes);
+        $field = $role === 'publisher' ? 'publisher' : 'reporter';
+        $list = [];
+        foreach ($rows as $r) {
+            $v = trim((string)($r[$field] ?? ''));
+            if ($v !== '') $list[$v] = ($list[$v] ?? 0) + 1;
+        }
+        arsort($list);
+        echo json_encode(['ok' => true, 'items' => array_keys($list)], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case 'overview':
+        $allRows = rowsInRange($from, $to, '', '', '', '', '', $site, $keywords, $keywordMode, $timePeriods, $advReporters, $advPublishers, $advNewsTypes);
+        $scopeRows = $service !== '' ? rowsInRange($from, $to, $service, '', '', '', '', $site, $keywords, $keywordMode, $timePeriods, $advReporters, $advPublishers, $advNewsTypes) : $allRows;
+        $totalAll = count($allRows);
+        $totalScope = count($scopeRows);
+        $sumViews = array_sum(array_column($scopeRows, 'views'));
+        $sumViewsAll = array_sum(array_column($allRows, 'views'));
+        echo json_encode([
+            'ok' => true,
+            'total_all'      => $totalAll,
+            'total_scope'    => $totalScope,
+            'share_percent'  => ($service !== '' && $totalAll > 0) ? round($totalScope * 100 / $totalAll, 1) : null,
+            'avg_views'      => $totalScope > 0 ? round($sumViews / $totalScope, 1) : 0,
+            'sum_views'      => $sumViews,
+            'sum_views_share_percent' => ($service !== '' && $sumViewsAll > 0) ? round($sumViews * 100 / $sumViewsAll, 1) : null,
+            'series'         => buildSeries($scopeRows, $granularity),
+            'type_pie'       => typeBreakdownTable($scopeRows),
+            'type_avg_views' => typeAvgViewsTable($scopeRows),
+            'type_top_reporter_pie' => typeTopReporterPie($scopeRows),
+            'top_reporters_type_breakdown' => topReportersTypeBreakdown($scopeRows, 10),
+        ], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case 'hourly':
+        $rows = rowsInRange($from, $to, $service, '', '', $newsType, '', $site, $keywords, $keywordMode, $timePeriods, $advReporters, $advPublishers, $advNewsTypes);
+        echo json_encode(['ok' => true, 'series' => buildHourlySeries($rows)], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case 'subservice_series':
+        if ($service === '' || $subservice === '') { echo json_encode(['ok' => false, 'error' => 'سرویس یا زیرسرویس انتخاب نشده است.'], JSON_UNESCAPED_UNICODE); break; }
+        $allRows = rowsInRange($from, $to, $service, '', '', '', $subservice, $site, $keywords, $keywordMode, $timePeriods, $advReporters, $advPublishers, $advNewsTypes);
+        $chartRows = $newsType !== '' ? array_values(array_filter($allRows, function($r) use ($newsType) { return ($r['news_type'] ?? '') === $newsType; })) : $allRows;
+        echo json_encode([
+            'ok' => true,
+            'series' => buildSeries($chartRows, $granularity),
+            'type_table' => typeBreakdownTable($allRows),
+            'total_count' => count($chartRows),
+            'total_avg_views' => count($chartRows) ? round(array_sum(array_column($chartRows, 'views')) / count($chartRows), 1) : 0,
+        ], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case 'person_series':
+        if ($name === '') { echo json_encode(['ok' => false, 'error' => 'نامی انتخاب نشده است.'], JSON_UNESCAPED_UNICODE); break; }
+        $allRows = rowsInRange($from, $to, $service, $role, $name, '', '', $site, $keywords, $keywordMode, $timePeriods, $advReporters, $advPublishers, $advNewsTypes);
+        $chartRows = $newsType !== '' ? array_values(array_filter($allRows, function($r) use ($newsType) { return ($r['news_type'] ?? '') === $newsType; })) : $allRows;
+        echo json_encode([
+            'ok' => true,
+            'series' => buildSeries($chartRows, $granularity),
+            'type_table' => typeBreakdownTable($allRows),
+            'total_count' => count($chartRows),
+            'total_avg_views' => count($chartRows) ? round(array_sum(array_column($chartRows, 'views')) / count($chartRows), 1) : 0,
+        ], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case 'top_news':
+        $rows = rowsInRange($from, $to, $service, '', '', $newsType, $subservice, $site, $keywords, $keywordMode, $timePeriods, $advReporters, $advPublishers, $advNewsTypes);
+        echo json_encode(['ok' => true, 'items' => topViewedNews($rows, $limit)], JSON_UNESCAPED_UNICODE);
+        break;
+
+    // ===== وضعیت حضور ایسنا در ترندهای گوگل =====
+
+    case 'isna_trends':
+        require_once __DIR__ . '/includes/trends.php';
+        $merged = trendsGetRangeMerged($from, $to);
+        $items = [];
+        foreach ($merged as $t) {
+            $isnaCov = null;
+            foreach ($t['coverage'] as $c) {
+                if (mb_strpos($c['agency'] ?? '', 'ایسنا') !== false) { $isnaCov = $c; break; }
+            }
+            if ($isnaCov === null) continue; // این ترند پوششی از ایسنا ندارد
+
+            // تطبیق دقیق خبر ایسنا از طریق «تیتر عیناً یکسان» با ردیف‌های داخلی (بدون محدودیت به بازهٔ تاریخی گزارش،
+            // چون تاریخ واقعی خبر می‌تواند با تاریخ ترند یکی نباشد)
+            $normTitle = function (string $s): string {
+                $s = normalizePersianChars(trim($s));
+                $s = preg_replace('/\s+/u', ' ', $s);
+                return $s;
+            };
+            $targetTitle = $normTitle($isnaCov['title'] ?? '');
+            $matched = null;
+            if ($targetTitle !== '') {
+                $activeFileIds = excelActiveFileIds();
+                foreach (jsonRead('excel_rows') as $row) {
+                    if (!isset($activeFileIds[(int)($row['file_id'] ?? 0)])) continue;
+                    if (($row['site'] ?? '') !== 'ایسنا') continue;
+                    if ($normTitle((string)($row['title'] ?? '')) === $targetTitle) { $matched = $row; break; }
+                }
+            }
+
+            $items[] = [
+                'keyword'     => $t['keyword'],
+                'date_label'  => jalaliDateLabel($t['date']),
+                'title'       => $isnaCov['title'],
+                'url'         => $isnaCov['url'],
+                'reporter'    => $matched['reporter'] ?? null,
+                'service_sub' => $matched['service_sub'] ?? null,
+                'news_type'   => $matched['news_type'] ?? null,
+                'views'       => isset($matched['views']) ? (int)$matched['views'] : null,
+            ];
+        }
+        echo json_encode(['ok' => true, 'items' => array_slice($items, 0, $limit)], JSON_UNESCAPED_UNICODE);
+        break;
+
+    // ===== بررسی کیفی (بر پایه داده‌های نظارت / news_entries) =====
+
+    case 'qc_reporters':
+        $set = [];
+        foreach (newsEntriesInRange($from, $to, $service, '', '', '', $site, $keywords, $keywordMode, $advReporters, $advPublishers, $advNewsTypes) as $r) {
+            $v = trim((string)($r['reporter'] ?? ''));
+            if ($v !== '') $set[$v] = true;
+        }
+        $list = array_keys($set);
+        sort($list, SORT_FLAG_CASE | SORT_STRING);
+        echo json_encode(['ok' => true, 'items' => $list], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case 'qc_news_types':
+        $set = [];
+        foreach (newsEntriesInRange($from, $to, $service, '', '', '', $site, $keywords, $keywordMode, $advReporters, $advPublishers, $advNewsTypes) as $r) {
+            $v = trim((string)($r['news_type'] ?? ''));
+            if ($v !== '') $set[$v] = true;
+        }
+        $list = array_keys($set);
+        sort($list, SORT_FLAG_CASE | SORT_STRING);
+        echo json_encode(['ok' => true, 'items' => $list], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case 'qc_summary':
+        $reviewed = newsEntriesInRange($from, $to, $service, $subservice, $reporter, $newsType, $site, $keywords, $keywordMode, $advReporters, $advPublishers, $advNewsTypes);
+        $totalRows = rowsInRange($from, $to, $service, $reporter !== '' ? 'reporter' : '', $reporter, $newsType, $subservice, $site, $keywords, $keywordMode, [], $advReporters, $advPublishers, $advNewsTypes);
+        $reviewedCount = count($reviewed);
+        $totalCount = count($totalRows);
+        echo json_encode([
+            'ok' => true,
+            'reviewed_count' => $reviewedCount,
+            'total_count'    => $totalCount,
+            'coverage_percent' => $totalCount > 0 ? round($reviewedCount * 100 / $totalCount, 1) : null,
+        ], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case 'qc_items':
+        $reviewed = newsEntriesInRange($from, $to, $service, $subservice, $reporter, $newsType, $site, $keywords, $keywordMode, $advReporters, $advPublishers, $advNewsTypes);
+        $items = [];
+        foreach ($reviewed as $r) {
+            $items[] = [
+                'title'          => $r['title'] ?? '',
+                'site'           => $r['site'] ?? '',
+                'service_main'   => $r['service_main'] ?? '',
+                'service_sub'    => $r['service_sub'] ?? '',
+                'news_type'      => $r['news_type'] ?? '',
+                'real_news_type' => $r['real_news_type'] ?? '',
+                'views'          => newsEntryViews($r),
+                'reporter'       => $r['reporter'] ?? '',
+                'publisher'      => $r['publisher'] ?? '',
+                'link'           => $r['news_link'] ?? '',
+                'date'           => $r['entry_date'] ?? '',
+            ];
+        }
+        echo json_encode(['ok' => true, 'items' => $items], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case 'qc_match':
+        $reviewed = newsEntriesInRange($from, $to, $service, $subservice, $reporter, $newsType, $site, $keywords, $keywordMode, $advReporters, $advPublishers, $advNewsTypes);
+        $match = 0; $mismatch = 0; $incomplete = 0;
+        foreach ($reviewed as $r) {
+            $nt = trim((string)($r['news_type'] ?? ''));
+            $rt = trim((string)($r['real_news_type'] ?? ''));
+            if ($nt === '' || $rt === '') { $incomplete++; continue; }
+            if (newsElementsMatchType($r)) $match++; else $mismatch++;
+        }
+        echo json_encode(['ok' => true, 'items' => [
+            ['label' => 'تطابق دارد', 'count' => $match],
+            ['label' => 'تطابق ندارد', 'count' => $mismatch],
+            ['label' => 'اطلاعات ناقص', 'count' => $incomplete],
+        ]], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case 'qc_elements':
+        $reviewed = newsEntriesInRange($from, $to, $service, $subservice, $reporter, $newsType, $site, $keywords, $keywordMode, $advReporters, $advPublishers, $advNewsTypes);
+        $counts = ['رعایت شده است' => 0, 'رعایت نشده است' => 0, 'سایر' => 0, 'ثبت نشده' => 0];
+        foreach ($reviewed as $r) { $counts[newsElementsStatus($r)]++; }
+        $items = [];
+        foreach ($counts as $label => $cnt) { $items[] = ['label' => $label, 'count' => $cnt]; }
+        echo json_encode(['ok' => true, 'items' => $items], JSON_UNESCAPED_UNICODE);
+        break;
+
+    default:
+        echo json_encode(['ok' => false, 'error' => 'عملیات نامعتبر.'], JSON_UNESCAPED_UNICODE);
 }
