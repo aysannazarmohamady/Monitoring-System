@@ -161,6 +161,40 @@ switch ($action) {
         echo json_encode(['ok' => true, 'items' => topViewedNews($rows, $limit)], JSON_UNESCAPED_UNICODE);
         break;
 
+    // ===== ابر کلمات پرتکرار تیترها =====
+
+    case 'wordcloud':
+        $wcLimit = (int)($_GET['wc_limit'] ?? 60);
+        if (!in_array($wcLimit, [40, 60, 80, 120], true)) $wcLimit = 60;
+        $rows = rowsInRange($from, $to, $service, '', '', '', '', $site, $keywords, $keywordMode, $timePeriods, $advReporters, $advPublishers, $advNewsTypes);
+        echo json_encode(['ok' => true, 'items' => buildTitleWordCloud($rows, $wcLimit)], JSON_UNESCAPED_UNICODE);
+        break;
+
+    case 'wordcloud_news':
+        $word = trim((string)($_GET['word'] ?? ''));
+        if ($word === '') {
+            echo json_encode(['ok' => true, 'count' => 0, 'items' => []], JSON_UNESCAPED_UNICODE);
+            break;
+        }
+        $wordKey = normalizePersianChars(implode(' ', tokenizeTitleWords($word)));
+        $rows = rowsInRange($from, $to, $service, '', '', '', '', $site, $keywords, $keywordMode, $timePeriods, $advReporters, $advPublishers, $advNewsTypes);
+        $matched = [];
+        foreach ($rows as $r) {
+            $titleKey = normalizePersianChars(implode(' ', tokenizeTitleWords((string)($r['title'] ?? ''))));
+            if ($wordKey !== '' && strpos(' ' . $titleKey . ' ', ' ' . $wordKey . ' ') !== false) $matched[] = $r;
+        }
+        usort($matched, fn($a, $b) => (int)($b['views'] ?? 0) <=> (int)($a['views'] ?? 0));
+        $items = [];
+        foreach (array_slice($matched, 0, 300) as $r) {
+            $items[] = [
+                'title' => $r['title'] ?? '', 'date' => $r['date'] ?? '', 'reporter' => $r['reporter'] ?? '',
+                'publisher' => $r['publisher'] ?? '', 'service_sub' => $r['service_sub'] ?? '',
+                'news_type' => $r['news_type'] ?? '', 'views' => (int)($r['views'] ?? 0), 'link' => $r['news_link'] ?? '',
+            ];
+        }
+        echo json_encode(['ok' => true, 'count' => count($matched), 'items' => $items], JSON_UNESCAPED_UNICODE);
+        break;
+
     // ===== وضعیت حضور ایسنا در ترندهای گوگل =====
 
     case 'isna_trends':

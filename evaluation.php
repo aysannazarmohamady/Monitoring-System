@@ -455,8 +455,13 @@ button.bf-header{
 
   <!-- بررسی کیفی -->
   <div class="card shadow-sm p-4 mb-4">
-    <h6 class="mb-3">بررسی کیفی (خروجی بررسی‌های نظارت)</h6>
-    <p class="text-muted small">این بخش از داده‌های ثبت‌شده در بخش «نظارت» (ثبت خبر روزانه) استفاده می‌کند و بازه/سرویسِ بالای صفحه روی آن هم اعمال می‌شود.</p>
+    <h6 class="mb-0">
+      <button class="btn btn-link text-decoration-none p-0 w-100 d-flex justify-content-between align-items-center fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#qcBody" aria-expanded="false" aria-controls="qcBody">
+        <span>بررسی کیفی (خروجی بررسی‌های نظارت)</span><span class="small text-muted">برای مشاهده کلیک کنید ▾</span>
+      </button>
+    </h6>
+    <div class="collapse" id="qcBody">
+    <p class="text-muted small mt-3">این بخش از داده‌های ثبت‌شده در بخش «نظارت» (ثبت خبر روزانه) استفاده می‌کند و بازه/سرویسِ بالای صفحه روی آن هم اعمال می‌شود.</p>
     <div class="row g-3 mb-3">
       <div class="col-md-4">
         <label class="form-label">فیلتر زیرسرویس</label>
@@ -497,6 +502,7 @@ button.bf-header{
         <tbody id="qcItemsTable"></tbody>
       </table>
     </div>
+    </div><!-- /#qcBody -->
   </div>
 
 </div>
@@ -1079,6 +1085,18 @@ async function loadQcSection(){
 
 // ===================== هماهنگ‌کننده کلی =====================
 
+// بارگذاری تنبل «بررسی کیفی»: فقط وقتی باکس باز باشد؛ در غیر این صورت فقط علامت «کهنه» می‌خورد
+let qcStale = true;
+function qcIsOpen(){ return qs('qcBody').classList.contains('show'); }
+async function loadQcAll(){
+  qcStale = false;
+  await loadQcOptions();
+  await loadQcSection();
+}
+qs('qcBody').addEventListener('shown.bs.collapse', () => {
+  if (qcStale && qs('reportArea').style.display !== 'none') loadQcAll();
+});
+
 async function loadNewsTypeOptionsForScope(){
   const {from, to} = currentRange();
   const service = currentService();
@@ -1095,8 +1113,9 @@ async function refreshScope(){
   await Promise.all([
     loadOverview(), loadHourly(), loadWordcloud(), loadSubserviceOptions(), loadTopSubserviceOptions(),
     loadPersonOptions('reporter'), loadPersonOptions('publisher'), loadTopNews(), loadIsnaTrends(),
-    loadQcOptions().then(loadQcSection),
   ]);
+  qcStale = true;
+  if (qcIsOpen()) loadQcAll();
 }
 
 async function onSiteChange(){
@@ -1167,6 +1186,132 @@ document.addEventListener('DOMContentLoaded', function(){
     new bootstrap.Tooltip(el);
   });
 });
+</script>
+
+<!-- ===================== افزودن به «سازنده گزارش» ===================== -->
+<style>
+.rb-add{
+  display:inline-flex; align-items:center; justify-content:center; width:18px; height:18px; border-radius:50%;
+  border:1px solid #9fb3d1; background:#fff; color:#5b7397; font-size:14px; font-weight:700; line-height:1;
+  cursor:pointer; margin-inline-start:8px; vertical-align:middle; opacity:.4; transition:opacity .15s, background .15s; user-select:none;
+}
+.rb-add:hover{ opacity:1; background:#1f5aa8; border-color:#1f5aa8; color:#fff; }
+h6:hover .rb-add, .rb-num-host:hover > .rb-add, .rb-anchor:hover .rb-add{ opacity:.85; }
+.rb-anchor{ position:relative; height:0; z-index:6; }
+.rb-anchor .rb-add{ position:absolute; top:0; left:0; margin:0; }
+.rb-num-host{ position:relative; }
+.rb-num-host > .rb-add{ position:absolute; top:5px; left:5px; margin:0; }
+.rb-fab{
+  position:fixed; bottom:18px; left:18px; z-index:1050; background:#1f5aa8; color:#fff !important; text-decoration:none;
+  border-radius:999px; padding:9px 16px; font-size:.85rem; font-weight:700; box-shadow:0 4px 14px rgba(20,35,60,.3);
+}
+.rb-toast{
+  position:fixed; bottom:70px; left:18px; z-index:1051; background:#16233d; color:#fff; border-radius:8px;
+  padding:8px 14px; font-size:.85rem; opacity:0; transition:opacity .2s; pointer-events:none; max-width:320px;
+}
+.rb-toast.show{ opacity:1; }
+.rb-toast.err{ background:#a33; }
+</style>
+<a id="rbFab" class="rb-fab" href="report_builder.php" target="_blank" rel="noopener">📄 گزارش من (<span id="rbCount">0</span>)</a>
+<div id="rbToast" class="rb-toast"></div>
+<script>
+(function(){
+  const RB_TABLE_ROWS = 30;
+  const area = document.getElementById('reportArea');
+  const toastEl = document.getElementById('rbToast');
+  let toastTimer = null;
+  function toast(msg, isErr){
+    toastEl.textContent = msg; toastEl.classList.toggle('err', !!isErr); toastEl.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2600);
+  }
+  function setCount(n){ document.getElementById('rbCount').textContent = Number(n).toLocaleString('fa-IR'); }
+
+  function ctxText(){
+    const {from, to} = currentRange(), svc = currentService(), site = currentSite();
+    return [from && to ? from + ' تا ' + to : '', svc ? 'سرویس: ' + svc.split(',').join('، ') : '', site ? 'سایت: ' + site : ''].filter(Boolean).join(' | ');
+  }
+  function headingEl(el){
+    const box = el.closest('.card') || area;
+    const hs = Array.from(box.querySelectorAll('h6')).filter(h => h.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING);
+    return hs.length ? hs[hs.length - 1] : box.querySelector('h6');
+  }
+  function headingFor(el){
+    const h = headingEl(el);
+    if (!h) return '';
+    const c = h.cloneNode(true); c.querySelectorAll('.text-muted,.rb-add').forEach(n => n.remove());
+    return c.textContent.replace(/\s+/g, ' ').trim();
+  }
+
+  function chartItem(cv){
+    if (typeof Chart !== 'undefined' && Chart.getChart && !Chart.getChart(cv)) throw new Error('این نمودار هنوز بارگذاری نشده است.');
+    if (cv.width < 20 || cv.clientWidth < 20) throw new Error('نمودار قابل مشاهده نیست (ابتدا بخش را باز کنید).');
+    const t = document.createElement('canvas'); t.width = cv.width; t.height = cv.height;
+    const c = t.getContext('2d'); c.fillStyle = '#fff'; c.fillRect(0, 0, t.width, t.height); c.drawImage(cv, 0, 0);
+    return {type:'chart', title: headingFor(cv) || 'نمودار', ctx: ctxText(), img: t.toDataURL('image/png')};
+  }
+  function tableItem(tbl){
+    const rows = Array.from(tbl.querySelectorAll('tbody tr'));
+    if (!rows.length || (rows.length === 1 && rows[0].cells.length === 1)) throw new Error('داده‌ای برای افزودن نیست.');
+    const t = tbl.cloneNode(true);
+    let ctx = ctxText();
+    if (rows.length > RB_TABLE_ROWS){
+      Array.from(t.querySelectorAll('tbody tr')).slice(RB_TABLE_ROWS).forEach(r => r.remove());
+      ctx += (ctx ? ' | ' : '') + RB_TABLE_ROWS + ' ردیف اول از ' + rows.length.toLocaleString('fa-IR');
+    }
+    t.querySelectorAll('[id]').forEach(n => n.removeAttribute('id'));
+    return {type:'table', title: headingFor(tbl) || 'جدول', ctx, html: t.outerHTML};
+  }
+  function numberItem(box){
+    const strong = box.querySelector('strong');
+    const c = box.cloneNode(true); c.querySelectorAll('strong,.rb-add').forEach(n => n.remove());
+    const label = c.textContent.replace(/\s+/g, ' ').replace(/[:：]\s*$/, '').trim();
+    return {type:'number', title: label, label, value: strong ? strong.textContent.trim() : '', ctx: ctxText()};
+  }
+
+  async function addToReport(build, target){
+    try {
+      const item = build(target);
+      const res = await fetch('report_api.php', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'add', item})});
+      const r = await res.json();
+      if (!r.ok) throw new Error(r.error || 'خطا در افزودن به گزارش');
+      setCount(r.count); toast('به گزارش اضافه شد ✓');
+    } catch (e) { toast(e.message || 'خطا در افزودن به گزارش', true); }
+  }
+  function makeBtn(build, target){
+    const b = document.createElement('span');
+    b.className = 'rb-add'; b.textContent = '+'; b.title = 'افزودن به گزارش';
+    b.setAttribute('role', 'button'); b.tabIndex = 0;
+    const go = e => { e.preventDefault(); e.stopPropagation(); addToReport(build, target); };
+    b.addEventListener('click', go);
+    b.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') go(e); });
+    return b;
+  }
+  // دکمه در یک لنگر با ارتفاع صفر قبل از عنصر درج می‌شود تا چیدمان و اندازه‌ی نمودارها هیچ تغییری نکند
+  function anchorBefore(el, build, target){
+    const a = document.createElement('div'); a.className = 'rb-anchor';
+    a.appendChild(makeBtn(build, target)); el.parentNode.insertBefore(a, el);
+  }
+  // اولویت: کنار عنوان همان باکس (هم‌ردیف عنوان)؛ اگر عنوان قبلاً دکمه گرفته بود، گوشه‌ی بالا-چپ خود عنصر
+  const usedHeadings = new Set();
+  function attach(el, anchorEl, build){
+    const h = headingEl(el);
+    if (h && !usedHeadings.has(h)){
+      usedHeadings.add(h);
+      (h.querySelector('button span:first-child') || h).appendChild(makeBtn(build, el));
+    } else anchorBefore(anchorEl, build, el);
+  }
+
+  area.querySelectorAll('canvas, table').forEach(el => {
+    if (el.tagName === 'CANVAS') attach(el, el, chartItem);
+    else attach(el, el.closest('.table-responsive') || el, () => tableItem(el));
+  });
+  area.querySelectorAll('.bg-light.rounded.text-center').forEach(box => {
+    if (!box.querySelector('strong')) return;
+    box.classList.add('rb-num-host'); box.appendChild(makeBtn(numberItem, box));
+  });
+
+  fetch('report_api.php?action=count').then(r => r.json()).then(r => { if (r.ok) setCount(r.count); }).catch(() => {});
+})();
 </script>
 
 <?php require __DIR__ . '/includes/layout_bottom.php'; ?>
