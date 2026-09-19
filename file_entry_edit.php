@@ -38,7 +38,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'real_news_type'      => trim($_POST['real_news_type'] ?? ''),
         'interviewee'         => trim($_POST['interviewee'] ?? ''),
         'news_elements'       => $newsElements,
-        'source'              => trim($_POST['source'] ?? ''),
+        'source'              => trim($_POST['source'] ?? '') !== '' ? trim($_POST['source']) : trim((string)($excelRow['source'] ?? '')),
         'description'         => trim($_POST['description'] ?? ''),
         'tag'                 => $tag,
         'tag_note'            => trim($_POST['tag_note'] ?? ''),
@@ -101,7 +101,7 @@ require __DIR__ . '/includes/layout_top.php';
              style="<?= $neIsOther ? '' : 'display:none' ?>" placeholder="توضیح مورد سایر..."
              value="<?= htmlspecialchars($neIsOther ? $neVal : '') ?>">
     </div>
-    <div class="col-md-6"><label class="form-label">منبع</label><input class="form-control" name="source" value="<?= htmlspecialchars($existing['source'] ?? '') ?>"></div>
+    <div class="col-md-6"><label class="form-label">منبع</label><input class="form-control" name="source" value="<?= htmlspecialchars(($existing['source'] ?? '') !== '' ? $existing['source'] : ($excelRow['source'] ?? '')) ?>"></div>
     <div class="col-12"><label class="form-label">توضیح کلی خبر</label><textarea class="form-control" name="description" rows="2"><?= htmlspecialchars($existing['description'] ?? '') ?></textarea></div>
     <div class="col-md-6"><label class="form-label">برچسب</label><input class="form-control" name="tag" value="<?= htmlspecialchars($existing['tag'] ?? '') ?>"></div>
     <div class="col-md-6"><label class="form-label">توضیح برچسب</label><input class="form-control" name="tag_note" value="<?= htmlspecialchars($existing['tag_note'] ?? '') ?>"></div>

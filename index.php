@@ -47,6 +47,32 @@ arsort($monitorCounts);
 $topReporter = array_key_first($monitorCounts) ?? '';
 $topReporterCount = $monitorCounts[$topReporter] ?? 0;
 
+// ---- سری زمانی روزانه تعداد خبرهای بررسی‌شده به تفکیک ناظر (هر خبر یک‌بار؛ ویرایش مجدد شمرده نمی‌شود) ----
+$monitorDaily = []; // ناظر => [تاریخ => تعداد]
+foreach ($dateEntries as $r) {
+    $m = trim((string)($r['entered_by_display'] ?? ''));
+    $d = (string)($r['entry_date'] ?? '');
+    if ($m === '' || $d === '') continue;
+    $monitorDaily[$m][$d] = ($monitorDaily[$m][$d] ?? 0) + 1;
+}
+$chartDays = [];
+[$fy, $fm, $fd] = array_map('intval', explode('/', $from));
+[$ty, $tm, $td] = array_map('intval', explode('/', $to));
+$jdnFrom = j2d($fy, $fm, $fd);
+$jdnTo   = min(j2d($ty, $tm, $td), $jdnFrom + 366); // سقف یک‌سال برای جلوگیری از نمودار بسیار بزرگ
+for ($j = $jdnFrom; $j <= $jdnTo; $j++) {
+    $jd = d2j($j);
+    $chartDays[] = sprintf('%04d/%02d/%02d', $jd['jy'], $jd['jm'], $jd['jd']);
+}
+$monitorChartLabels = array_map('jalaliDateLabelShort', $chartDays);
+$monitorChartDatasets = [];
+foreach (array_keys($monitorCounts) as $mon) { // به ترتیب بیشترین خبر
+    $monitorChartDatasets[] = [
+        'label' => $mon,
+        'data'  => array_map(fn($d) => (int)($monitorDaily[$mon][$d] ?? 0), $chartDays),
+    ];
+}
+
 $recent = array_slice($dateEntries, 0, 5);
 
 // ---- اورویو آماری: بر اساس کل فایل اکسل آپلودشده (excel_rows)، مشابه بخش ارزیابی ----
@@ -246,6 +272,32 @@ require __DIR__ . '/includes/layout_top.php';
         </tbody>
       </table>
     </div>
+    <hr>
+    <div class="fw-bold small mb-2">روند روزانه تعداد خبرهای بررسی‌شده هر ناظر</div>
+    <div style="position:relative;height:340px">
+      <canvas id="monitorDailyChart"></canvas>
+    </div>
+    <script>
+    (function(){
+      const labels = <?= json_encode($monitorChartLabels, JSON_UNESCAPED_UNICODE) ?>;
+      const raw = <?= json_encode($monitorChartDatasets, JSON_UNESCAPED_UNICODE) ?>;
+      const palette = ['#1f5aa8','#e0a800','#198754','#dc3545','#6f42c1','#fd7e14','#20c997','#0dcaf0','#d63384','#6c757d','#795548','#3f51b5'];
+      const datasets = raw.map((d, i) => ({
+        label: d.label, data: d.data,
+        borderColor: palette[i % palette.length], backgroundColor: palette[i % palette.length],
+        tension: 0.3, borderWidth: 2, pointRadius: 3, fill: false
+      }));
+      new Chart(document.getElementById('monitorDailyChart').getContext('2d'), {
+        type: 'line',
+        data: { labels: labels, datasets: datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 }, title: { display: true, text: 'تعداد خبر' } } }
+        }
+      });
+    })();
+    </script>
   <?php endif; ?>
 </div>
 
